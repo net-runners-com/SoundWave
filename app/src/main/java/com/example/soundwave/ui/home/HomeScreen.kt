@@ -1,0 +1,197 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
+package com.example.soundwave.ui.home
+
+import androidx.compose.animation.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
+import com.example.soundwave.ui.components.TabItem
+import com.example.soundwave.ui.home.tabs.*
+
+@Composable
+fun HomeScreen(
+    viewModel: HomeViewModel = viewModel(
+        factory = HomeViewModelFactory(LocalContext.current.applicationContext as android.app.Application)
+    ),
+    onSongSelected: (Long) -> Unit = {},
+    onAlbumSelected: (String) -> Unit = {},
+    onArtistSelected: (String) -> Unit = {},
+    onPlaylistSelected: (Long) -> Unit = {}
+) {
+    var selectedTabIndex by remember { mutableStateOf(0) }
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                modifier = Modifier.width(240.dp)
+            ) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = "SoundWave",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+                Divider()
+                
+                // タブのアイテム
+                TabItem.values().forEachIndexed { index, tabItem ->
+                    NavigationDrawerItem(
+                        icon = { Icon(tabItem.icon, contentDescription = null) },
+                        label = { Text(tabItem.title) },
+                        selected = selectedTabIndex == index,
+                        onClick = {
+                            selectedTabIndex = index
+                            scope.launch {
+                                drawerState.close()
+                            }
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    )
+                }
+                
+                Divider()
+                
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    label = { Text("検索") },
+                    selected = false,
+                    onClick = {
+                        scope.launch {
+                            drawerState.close()
+                        }
+                        // TODO: 検索画面へ遷移
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                    label = { Text("設定") },
+                    selected = false,
+                    onClick = {
+                        scope.launch {
+                            drawerState.close()
+                        }
+                        // TODO: 設定画面へ遷移
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+            }
+        }
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("SoundWave") },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            scope.launch {
+                                drawerState.open()
+                            }
+                        }) {
+                            Icon(
+                                Icons.Default.Menu,
+                                contentDescription = "メニュー"
+                            )
+                        }
+                    },
+                    actions = {
+                        val isScanning by viewModel.isScanning.collectAsState()
+                        if (isScanning) {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .padding(16.dp)
+                            )
+                        }
+                    }
+                )
+            },
+            bottomBar = {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 20.dp),
+                    color = MaterialTheme.colorScheme.surface
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        TabItem.values().forEachIndexed { index, tabItem ->
+                            val isSelected = selectedTabIndex == index
+                            IconButton(
+                                onClick = { selectedTabIndex = index },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(64.dp)
+                                    .padding(bottom = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = tabItem.icon,
+                                    contentDescription = tabItem.title,
+                                    modifier = Modifier.size(32.dp),
+                                    tint = if (isSelected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            // スムーズなタブ切り替え（Crossfadeで軽量）
+            Crossfade(
+                targetState = selectedTabIndex,
+                animationSpec = tween(200),
+                label = "tab_transition"
+            ) { tabIndex ->
+                // タブコンテンツを表示（データは既にキャッシュされているので再読み込みなし）
+                when (TabItem.values().getOrNull(tabIndex)) {
+                    TabItem.SONGS -> SongsTab(
+                        viewModel = viewModel,
+                        onSongSelected = onSongSelected
+                    )
+                    TabItem.ALBUMS -> AlbumsTab(
+                        viewModel = viewModel,
+                        onAlbumSelected = onAlbumSelected
+                    )
+                    TabItem.ARTISTS -> ArtistsTab(
+                        viewModel = viewModel,
+                        onArtistSelected = onArtistSelected
+                    )
+                    TabItem.FOLDERS -> FoldersTab()
+                    TabItem.PLAYLISTS -> PlaylistsTab(
+                        viewModel = viewModel,
+                        onPlaylistSelected = onPlaylistSelected
+                    )
+                    TabItem.YOUTUBE -> YouTubeTab()
+                    null -> {}
+                }
+            }
+        }
+        }
+    }
+}
