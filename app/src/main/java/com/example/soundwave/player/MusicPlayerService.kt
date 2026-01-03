@@ -16,13 +16,25 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerNotificationManager
 import com.example.soundwave.MainActivity
 import com.example.soundwave.R
+import com.example.soundwave.data.AppDatabaseModule
 import com.example.soundwave.util.Constants
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class MusicPlayerService : Service() {
     private var exoPlayer: ExoPlayer? = null
     private val binder = MusicBinder()
     
     private var currentSongId: Long? = null
+    private var repeatMode: RepeatMode = RepeatMode.NONE
+    
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val musicRepository by lazy {
+        AppDatabaseModule.getMusicRepository(applicationContext)
+    }
     
     inner class MusicBinder : Binder() {
         fun getService(): MusicPlayerService = this@MusicPlayerService
@@ -48,7 +60,7 @@ class MusicPlayerService : Service() {
                                 updateNotification()
                             }
                             Player.STATE_ENDED -> {
-                                // TODO: 次の曲を再生
+                                handlePlaybackEnded()
                             }
                         }
                     }
@@ -60,14 +72,29 @@ class MusicPlayerService : Service() {
     }
     
     fun playSong(filePath: String, songId: Long) {
+        if (exoPlayer == null) {
+            android.util.Log.w("MusicPlayerService", "ExoPlayer is null, initializing...")
+            initializePlayer()
+        }
+        
         exoPlayer?.let { player ->
-            val uri = android.net.Uri.parse("file://$filePath")
-            val mediaItem = MediaItem.fromUri(uri)
-            player.setMediaItem(mediaItem)
-            player.prepare()
-            player.play()
-            currentSongId = songId
-            startForeground(Constants.NOTIFICATION_ID, createNotification())
+            try {
+                val uri = android.net.Uri.parse("file://$filePath")
+                android.util.Log.d("MusicPlayerService", "Playing song: $filePath")
+                val mediaItem = MediaItem.fromUri(uri)
+                player.setMediaItem(mediaItem)
+                player.prepare()
+                player.play()
+                currentSongId = songId
+                // 現在のrepeatModeを適用
+                setRepeatMode(repeatMode)
+                startForeground(Constants.NOTIFICATION_ID, createNotification())
+                android.util.Log.d("MusicPlayerService", "Song playback started")
+            } catch (e: Exception) {
+                android.util.Log.e("MusicPlayerService", "Error playing song", e)
+            }
+        } ?: run {
+            android.util.Log.e("MusicPlayerService", "ExoPlayer is still null after initialization")
         }
     }
     
@@ -103,6 +130,73 @@ class MusicPlayerService : Service() {
     }
     
     fun getPlayer(): ExoPlayer? = exoPlayer
+    
+    fun getCurrentSongId(): Long? = currentSongId
+    
+    fun setRepeatMode(mode: RepeatMode) {
+        repeatMode = mode
+        // exoPlayerが初期化されている場合のみ設定を適用
+        exoPlayer?.let { player ->
+            try {
+                when (mode) {
+                    RepeatMode.NONE -> {
+                        player.repeatMode = Player.REPEAT_MODE_OFF
+                        player.shuffleModeEnabled = false
+                    }
+                    RepeatMode.REPEAT_ONE -> {
+                        player.repeatMode = Player.REPEAT_MODE_ONE
+                        player.shuffleModeEnabled = false
+                    }
+                RepeatMode.REPEAT_ALL -> {
+                    // 全曲ループ: ExoPlayerのREPEAT_MODE_OFFにして、STATE_ENDEDで次の曲に進む
+                    // 単一のMediaItemしか設定されていないため、REPEAT_MODE_ALLは機能しない
+                    player.repeatMode = Player.REPEAT_MODE_OFF
+                    player.shuffleModeEnabled = false
+                }
+                    RepeatMode.SHUFFLE -> {
+                        player.repeatMode = Player.REPEAT_MODE_OFF
+                        player.shuffleModeEnabled = true
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MusicPlayerService", "Error setting repeat mode", e)
+            }
+        }
+    }
+    
+    private fun handlePlaybackEnded() {
+        exoPlayer?.let { player ->
+            when (repeatMode) {
+                RepeatMode.REPEAT_ONE -> {
+                    // 1曲ループ: 同じ曲を最初から再生
+                    // ExoPlayerのREPEAT_MODE_ONEで自動的に処理されるため、ここでは何もしない
+                    // ただし、念のためseekTo(0)を実行
+                    try {
+                        player.seekTo(0)
+                        player.play()
+                    } catch (e: Exception) {
+                        android.util.Log.e("MusicPlayerService", "Error in REPEAT_ONE handling", e)
+                    }
+                }
+                RepeatMode.REPEAT_ALL -> {
+                    // 全曲ループ: 次の曲を再生
+                    playNextSong()
+                }
+                RepeatMode.SHUFFLE -> {
+                    // シャッフル: ExoPlayerのshuffleModeEnabledで自動的に処理される
+                    // 何もしない
+                }
+                RepeatMode.NONE -> {
+                    // ループなし: 再生を停止
+                    try {
+                        pause()
+                    } catch (e: Exception) {
+                        android.util.Log.e("MusicPlayerService", "Error in NONE handling", e)
+                    }
+                }
+            }
+        }
+    }
     
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -175,8 +269,83 @@ class MusicPlayerService : Service() {
         return START_STICKY
     }
     
+    fun playNextSong() {
+        serviceScope.launch {
+            playNextSongInternal()
+        }
+    }
+    
+    fun playPreviousSong() {
+        serviceScope.launch {
+            playPreviousSongInternal()
+        }
+    }
+    
+    private suspend fun playNextSongInternal() {
+        val currentId = currentSongId ?: return
+        try {
+            // すべての曲を取得
+            val allSongs = musicRepository.getAllSongsSync()
+            if (allSongs.isEmpty()) {
+                android.util.Log.w("MusicPlayerService", "No songs available for next song")
+                return
+            }
+            
+            // 現在の曲のインデックスを探す
+            val currentIndex = allSongs.indexOfFirst { song -> song.id == currentId }
+            if (currentIndex == -1) {
+                android.util.Log.w("MusicPlayerService", "Current song not found in list")
+                return
+            }
+            
+            // 次の曲のインデックスを計算（最後の曲の場合は最初に戻る）
+            val nextIndex = (currentIndex + 1) % allSongs.size
+            val nextSong = allSongs[nextIndex]
+            
+            android.util.Log.d("MusicPlayerService", "Playing next song: ${nextSong.title} (index: $nextIndex)")
+            // 次の曲を再生
+            playSong(nextSong.filePath, nextSong.id)
+        } catch (e: Exception) {
+            android.util.Log.e("MusicPlayerService", "Error playing next song", e)
+        }
+    }
+    
+    private suspend fun playPreviousSongInternal() {
+        val currentId = currentSongId ?: return
+        try {
+            // すべての曲を取得
+            val allSongs = musicRepository.getAllSongsSync()
+            if (allSongs.isEmpty()) {
+                android.util.Log.w("MusicPlayerService", "No songs available for previous song")
+                return
+            }
+            
+            // 現在の曲のインデックスを探す
+            val currentIndex = allSongs.indexOfFirst { song -> song.id == currentId }
+            if (currentIndex == -1) {
+                android.util.Log.w("MusicPlayerService", "Current song not found in list")
+                return
+            }
+            
+            // 前の曲のインデックスを計算（最初の曲の場合は最後に戻る）
+            val previousIndex = if (currentIndex == 0) {
+                allSongs.size - 1
+            } else {
+                currentIndex - 1
+            }
+            val previousSong = allSongs[previousIndex]
+            
+            android.util.Log.d("MusicPlayerService", "Playing previous song: ${previousSong.title} (index: $previousIndex)")
+            // 前の曲を再生
+            playSong(previousSong.filePath, previousSong.id)
+        } catch (e: Exception) {
+            android.util.Log.e("MusicPlayerService", "Error playing previous song", e)
+        }
+    }
+    
     override fun onDestroy() {
         super.onDestroy()
+        serviceScope.cancel()
         exoPlayer?.release()
         exoPlayer = null
     }

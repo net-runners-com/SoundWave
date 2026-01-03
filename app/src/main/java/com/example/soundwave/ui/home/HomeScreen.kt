@@ -17,7 +17,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import com.example.soundwave.ui.components.TabItem
+import com.example.soundwave.ui.components.NowPlayingFAB
 import com.example.soundwave.ui.home.tabs.*
+import com.example.soundwave.ui.player.PlayerScreen
+import com.example.soundwave.player.PlayerManager
 
 @Composable
 fun HomeScreen(
@@ -27,11 +30,23 @@ fun HomeScreen(
     onSongSelected: (Long) -> Unit = {},
     onAlbumSelected: (String) -> Unit = {},
     onArtistSelected: (String) -> Unit = {},
-    onPlaylistSelected: (Long) -> Unit = {}
+    onFolderSelected: (String) -> Unit = {},
+    onPlaylistSelected: (Long) -> Unit = {},
+    onSettingsClick: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     var selectedTabIndex by remember { mutableStateOf(0) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    
+    // 現在再生中の曲情報を取得
+    val playerManager = remember { PlayerManager.getInstance(context) }
+    val currentSongId by playerManager.currentSongId.collectAsState()
+    val isPlaying by playerManager.isPlaying.collectAsState()
+    
+    // ボトムシートの状態
+    val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showBottomSheet by remember { mutableStateOf(false) }
     
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -66,19 +81,6 @@ fun HomeScreen(
                 Divider()
                 
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    label = { Text("検索") },
-                    selected = false,
-                    onClick = {
-                        scope.launch {
-                            drawerState.close()
-                        }
-                        // TODO: 検索画面へ遷移
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                
-                NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Settings, contentDescription = null) },
                     label = { Text("設定") },
                     selected = false,
@@ -86,7 +88,7 @@ fun HomeScreen(
                         scope.launch {
                             drawerState.close()
                         }
-                        // TODO: 設定画面へ遷移
+                        onSettingsClick()
                     },
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
@@ -122,35 +124,63 @@ fun HomeScreen(
                 )
             },
             bottomBar = {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 20.dp),
-                    color = MaterialTheme.colorScheme.surface
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                Column {
+                    // 現在再生中の曲を表示（再生中の場合のみ）
+                    NowPlayingFAB(
+                        currentSongId = currentSongId,
+                        isPlaying = isPlaying,
+                        onSongClick = {}, // 画面遷移しない
+                        onPlayPause = {
+                            if (isPlaying) {
+                                playerManager.pause()
+                            } else {
+                                playerManager.resume()
+                            }
+                        },
+                        onExpandClick = {
+                            if (currentSongId != null) {
+                                showBottomSheet = true
+                            }
+                        }
+                    )
+                    
+                    // タブバー
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 20.dp),
+                        color = MaterialTheme.colorScheme.surface
                     ) {
-                        TabItem.values().forEachIndexed { index, tabItem ->
-                            val isSelected = selectedTabIndex == index
-                            IconButton(
-                                onClick = { selectedTabIndex = index },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(64.dp)
-                                    .padding(bottom = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = tabItem.icon,
-                                    contentDescription = tabItem.title,
-                                    modifier = Modifier.size(32.dp),
-                                    tint = if (isSelected) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            TabItem.values().forEachIndexed { index, tabItem ->
+                                val isSelected = selectedTabIndex == index
+                                IconButton(
+                                    onClick = { selectedTabIndex = index },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(64.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.TopCenter
+                                    ) {
+                                        Icon(
+                                            imageVector = tabItem.icon,
+                                            contentDescription = tabItem.title,
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .padding(top = 8.dp),
+                                            tint = if (isSelected) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
+                                        )
                                     }
-                                )
+                                }
                             }
                         }
                     }
@@ -182,7 +212,10 @@ fun HomeScreen(
                         viewModel = viewModel,
                         onArtistSelected = onArtistSelected
                     )
-                    TabItem.FOLDERS -> FoldersTab()
+                    TabItem.FOLDERS -> FoldersTab(
+                        viewModel = viewModel,
+                        onFolderSelected = onFolderSelected
+                    )
                     TabItem.PLAYLISTS -> PlaylistsTab(
                         viewModel = viewModel,
                         onPlaylistSelected = onPlaylistSelected
@@ -192,6 +225,28 @@ fun HomeScreen(
                 }
             }
         }
+        }
+        
+        // ボトムシート（プレーヤー画面）
+        if (showBottomSheet && currentSongId != null) {
+            ModalBottomSheet(
+                onDismissRequest = { showBottomSheet = false },
+                sheetState = bottomSheetState,
+                modifier = Modifier.fillMaxHeight()
+            ) {
+                PlayerScreen(
+                    songId = currentSongId!!,
+                    onBack = {
+                        scope.launch {
+                            bottomSheetState.hide()
+                        }.invokeOnCompletion {
+                            if (!bottomSheetState.isVisible) {
+                                showBottomSheet = false
+                            }
+                        }
+                    }
+                )
+            }
         }
     }
 }

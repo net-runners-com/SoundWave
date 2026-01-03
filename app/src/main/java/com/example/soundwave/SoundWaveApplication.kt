@@ -3,6 +3,7 @@ package com.example.soundwave
 import android.app.Application
 import com.example.soundwave.data.AppDatabaseModule
 import com.example.soundwave.data.repository.MusicRepository
+import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,6 +29,17 @@ class SoundWaveApplication : Application() {
             if (songs.isEmpty()) {
                 // データがない場合はスキャンを実行（非同期でファイルアクセス）
                 musicRepository.scanMusicFiles()
+            }
+        }
+        
+        // YouTubeDLの初期化（バックグラウンドで実行）
+        applicationScope.launch(Dispatchers.IO) {
+            try {
+                YoutubeDL.getInstance().init(this@SoundWaveApplication)
+                android.util.Log.d("SoundWaveApplication", "YoutubeDL initialized successfully")
+            } catch (e: Exception) {
+                android.util.Log.e("SoundWaveApplication", "Failed to initialize YoutubeDL", e)
+                // 初期化失敗は後で再試行可能
             }
         }
     }

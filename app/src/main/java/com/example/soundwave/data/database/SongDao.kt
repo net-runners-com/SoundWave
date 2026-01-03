@@ -39,6 +39,10 @@ interface SongDao {
     @Query("SELECT DISTINCT artist FROM songs")
     fun getAllArtists(): Flow<List<String>>
     
+    // フォルダ一覧を取得（すべての曲を取得してKotlin側で処理）
+    @Query("SELECT DISTINCT filePath FROM songs WHERE filePath IS NOT NULL AND filePath != ''")
+    fun getAllFilePaths(): Flow<List<String>>
+    
     @Query("SELECT * FROM songs WHERE filePath LIKE :folderPath || '%'")
     fun getSongsByFolder(folderPath: String): Flow<List<SongEntity>>
     

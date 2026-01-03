@@ -22,11 +22,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _songsCache = MutableStateFlow<List<com.example.soundwave.data.database.SongEntity>>(emptyList())
     private val _albumsCache = MutableStateFlow<List<String>>(emptyList())
     private val _artistsCache = MutableStateFlow<List<String>>(emptyList())
+    private val _foldersCache = MutableStateFlow<List<String>>(emptyList())
     private val _playlistsCache = MutableStateFlow<List<com.example.soundwave.data.database.PlaylistEntity>>(emptyList())
     
     val songs: StateFlow<List<com.example.soundwave.data.database.SongEntity>> = _songsCache.asStateFlow()
     val albums: StateFlow<List<String>> = _albumsCache.asStateFlow()
     val artists: StateFlow<List<String>> = _artistsCache.asStateFlow()
+    val folders: StateFlow<List<String>> = _foldersCache.asStateFlow()
     val playlists: StateFlow<List<com.example.soundwave.data.database.PlaylistEntity>> = _playlistsCache.asStateFlow()
     
     // Paging対応: 大量データ用
@@ -80,6 +82,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     musicRepository.getAllArtists().collect { _artistsCache.value = it }
                 }
                 launch {
+                    musicRepository.getAllFolders().collect { _foldersCache.value = it }
+                }
+                launch {
                     playlistRepository.getAllPlaylists().collect { _playlistsCache.value = it }
                 }
                 
@@ -104,6 +109,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _isLoading.value = false
             } finally {
                 _isScanning.value = false
+            }
+        }
+    }
+    
+    // プレイリスト作成
+    fun createPlaylist(name: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                playlistRepository.createPlaylist(name)
+                // プレイリスト一覧は自動的に更新される（Flowで監視中）
+            } catch (e: Exception) {
+                // エラーハンドリング（必要に応じてエラー状態を管理）
             }
         }
     }

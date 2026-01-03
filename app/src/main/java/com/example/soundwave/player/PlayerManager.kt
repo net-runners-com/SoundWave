@@ -39,6 +39,12 @@ class PlayerManager private constructor(
     private val _duration = MutableStateFlow(0L)
     val duration: StateFlow<Long> = _duration.asStateFlow()
     
+    private val _repeatMode = MutableStateFlow(RepeatMode.NONE)
+    val repeatMode: StateFlow<RepeatMode> = _repeatMode.asStateFlow()
+    
+    private val _currentSongId = MutableStateFlow<Long?>(null)
+    val currentSongId: StateFlow<Long?> = _currentSongId.asStateFlow()
+    
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val binder = service as? MusicPlayerService.MusicBinder
@@ -68,6 +74,7 @@ class PlayerManager private constructor(
     
     fun playSong(filePath: String, songId: Long) {
         service?.playSong(filePath, songId)
+        _currentSongId.value = songId
         _isPlaying.value = true
     }
     
@@ -90,7 +97,50 @@ class PlayerManager private constructor(
             _currentPosition.value = it.getCurrentPosition()
             _duration.value = it.getDuration()
             _isPlaying.value = it.isPlaying()
+            // 現在の曲IDも更新
+            val newSongId = it.getCurrentSongId()
+            if (newSongId != _currentSongId.value) {
+                _currentSongId.value = newSongId
+            }
         }
+    }
+    
+    fun setRepeatMode(mode: RepeatMode) {
+        _repeatMode.value = mode
+        service?.setRepeatMode(mode)
+    }
+    
+    fun toggleShuffle() {
+        val newMode = if (_repeatMode.value == RepeatMode.SHUFFLE) {
+            RepeatMode.NONE
+        } else {
+            RepeatMode.SHUFFLE
+        }
+        setRepeatMode(newMode)
+    }
+    
+    fun toggleRepeat() {
+        val newMode = when (_repeatMode.value) {
+            RepeatMode.NONE -> RepeatMode.REPEAT_ALL
+            RepeatMode.REPEAT_ALL -> RepeatMode.REPEAT_ONE
+            RepeatMode.REPEAT_ONE -> RepeatMode.NONE
+            RepeatMode.SHUFFLE -> RepeatMode.REPEAT_ALL // シャッフル中は全曲ループに
+        }
+        setRepeatMode(newMode)
+    }
+    
+    fun skipNext() {
+        service?.playNextSong()
+        // currentSongIdはMusicPlayerServiceから更新される
+    }
+    
+    fun skipPrevious() {
+        service?.playPreviousSong()
+        // currentSongIdはMusicPlayerServiceから更新される
+    }
+    
+    fun getCurrentSongId(): Long? {
+        return service?.getCurrentSongId()
     }
     
     override fun onDestroy(owner: LifecycleOwner) {

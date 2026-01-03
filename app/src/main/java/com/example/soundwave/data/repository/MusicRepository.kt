@@ -15,6 +15,8 @@ import com.example.soundwave.data.database.SongEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -31,6 +33,14 @@ class MusicRepository(
     fun getAllAlbums(): Flow<List<String>> = songDao.getAllAlbums()
     
     fun getAllArtists(): Flow<List<String>> = songDao.getAllArtists()
+    
+    // フォルダ一覧を取得（filePathから親ディレクトリを抽出）
+    fun getAllFolders(): Flow<List<String>> = songDao.getAllFilePaths().map { filePaths ->
+        filePaths.mapNotNull { filePath ->
+            val file = File(filePath)
+            file.parent ?: null
+        }.distinct().sorted()
+    }
     
     fun searchSongs(query: String): Flow<List<SongEntity>> = songDao.searchSongs(query)
     
@@ -150,6 +160,11 @@ class MusicRepository(
     }
     
     suspend fun getSongById(id: Long) = songDao.getSongById(id)
+    
+    // すべての曲を同期で取得（全曲ループ用）
+    suspend fun getAllSongsSync(): List<SongEntity> = withContext(Dispatchers.IO) {
+        getAllSongs().first()
+    }
     
     suspend fun incrementPlayCount(id: Long) {
         songDao.incrementPlayCount(id, System.currentTimeMillis())

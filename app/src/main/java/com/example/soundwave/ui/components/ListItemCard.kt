@@ -3,13 +3,19 @@
 package com.example.soundwave.ui.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
+import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 
 @Composable
@@ -33,18 +39,45 @@ fun ListItemCard(
         ) {
             // 画像の遅延読み込み (Coil)
             if (imageUrl != null) {
-                AsyncImage(
+                val imagePainter = rememberAsyncImagePainter(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(imageUrl)
                         .crossfade(true)
-                        .placeholder(android.R.drawable.ic_media_play)
-                        .error(android.R.drawable.ic_media_play)
-                        .build(),
-                    contentDescription = title,
+                        .build()
+                )
+                
+                Box(
                     modifier = Modifier
                         .size(56.dp)
                         .padding(end = 12.dp)
-                )
+                        .clip(MaterialTheme.shapes.medium)
+                ) {
+                    when (imagePainter.state) {
+                        is AsyncImagePainter.State.Loading,
+                        is AsyncImagePainter.State.Error -> {
+                            // デフォルトアイコンをテーマカラーで表示
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MusicNote,
+                                    contentDescription = title,
+                                    modifier = Modifier.size(32.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        else -> {
+                            AsyncImage(
+                                model = imagePainter.request,
+                                contentDescription = title,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                }
             }
             content?.invoke()
             Column(
