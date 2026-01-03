@@ -105,6 +105,10 @@ class PlayerManager private constructor(
         }
     }
     
+    fun applyAudioEffectSettings(settings: AudioEffectSettings) {
+        service?.applyAudioEffectSettings(settings)
+    }
+    
     fun setRepeatMode(mode: RepeatMode) {
         _repeatMode.value = mode
         service?.setRepeatMode(mode)
@@ -141,6 +145,10 @@ class PlayerManager private constructor(
     
     fun getCurrentSongId(): Long? {
         return service?.getCurrentSongId()
+    }
+    
+    fun getAudioEffectManager(): AudioEffectManager? {
+        return service?.getAudioEffectManagerInstance()
     }
     
     override fun onDestroy(owner: LifecycleOwner) {

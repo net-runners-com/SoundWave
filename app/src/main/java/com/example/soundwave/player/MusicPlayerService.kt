@@ -11,6 +11,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat as MediaNotificationCompat
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerNotificationManager
@@ -30,6 +31,10 @@ class MusicPlayerService : Service() {
     
     private var currentSongId: Long? = null
     private var repeatMode: RepeatMode = RepeatMode.NONE
+    
+    private val audioEffectManager by lazy {
+        AudioEffectManager(applicationContext)
+    }
     
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val musicRepository by lazy {
@@ -88,6 +93,14 @@ class MusicPlayerService : Service() {
                 currentSongId = songId
                 // 現在のrepeatModeを適用
                 setRepeatMode(repeatMode)
+                
+                // エフェクトを適用
+                val audioSessionId = player.audioSessionId
+                if (audioSessionId != 0) {
+                    audioEffectManager.attachToAudioSession(audioSessionId)
+                    loadAndApplyAudioEffects()
+                }
+                
                 startForeground(Constants.NOTIFICATION_ID, createNotification())
                 android.util.Log.d("MusicPlayerService", "Song playback started")
             } catch (e: Exception) {
@@ -132,6 +145,10 @@ class MusicPlayerService : Service() {
     fun getPlayer(): ExoPlayer? = exoPlayer
     
     fun getCurrentSongId(): Long? = currentSongId
+    
+    fun getAudioEffectManagerInstance(): AudioEffectManager {
+        return audioEffectManager
+    }
     
     fun setRepeatMode(mode: RepeatMode) {
         repeatMode = mode
@@ -345,9 +362,47 @@ class MusicPlayerService : Service() {
     
     override fun onDestroy() {
         super.onDestroy()
+        audioEffectManager.release()
         serviceScope.cancel()
         exoPlayer?.release()
         exoPlayer = null
+    }
+    
+    private fun loadAndApplyAudioEffects() {
+        val settings = AudioEffectSettingsManager.loadSettings(applicationContext)
+        audioEffectManager.applySettings(settings)
+        
+        // 再生速度とピッチを適用
+        exoPlayer?.let { player ->
+            try {
+                val playbackParameters = PlaybackParameters(
+                    settings.playbackSpeed,
+                    settings.pitch
+                )
+                player.playbackParameters = playbackParameters
+            } catch (e: Exception) {
+                android.util.Log.e("MusicPlayerService", "Failed to apply playback parameters", e)
+            }
+        }
+    }
+    
+    fun applyAudioEffectSettings(settings: AudioEffectSettings) {
+        audioEffectManager.applySettings(settings)
+        
+        // 再生速度とピッチを適用
+        exoPlayer?.let { player ->
+            try {
+                // ExoPlayerのPlaybackParametersを使用して速度とピッチを設定
+                val playbackParameters = PlaybackParameters(
+                    settings.playbackSpeed,
+                    settings.pitch
+                )
+                player.playbackParameters = playbackParameters
+                android.util.Log.d("MusicPlayerService", "Playback parameters applied: speed=${settings.playbackSpeed}, pitch=${settings.pitch}")
+            } catch (e: Exception) {
+                android.util.Log.e("MusicPlayerService", "Failed to apply playback parameters", e)
+            }
+        }
     }
     
 }

@@ -9,6 +9,9 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.soundwave.data.AppDatabaseModule
 import com.example.soundwave.player.PlayerManager
 import com.example.soundwave.ui.permission.PermissionScreen
+import com.example.soundwave.ui.album.AlbumDetailScreen
+import com.example.soundwave.ui.artist.ArtistDetailScreen
+import com.example.soundwave.ui.folder.FolderDetailScreen
 import com.example.soundwave.ui.home.HomeScreen
 import com.example.soundwave.ui.player.PlayerScreen
 import com.example.soundwave.ui.settings.SettingsScreen
@@ -63,36 +66,36 @@ fun SoundWaveNavigation(
             )
         }
         currentAlbum != null -> {
-            // TODO: アルバム詳細画面
-            HomeScreen(
+            AlbumDetailScreen(
+                albumName = currentAlbum!!,
+                onBack = { currentAlbum = null },
                 onSongSelected = onSongClick,
                 onAlbumSelected = { album -> currentAlbum = album },
                 onArtistSelected = { artist -> currentArtist = artist },
                 onFolderSelected = { folderPath -> currentFolderPath = folderPath },
-                onPlaylistSelected = { playlistId -> currentPlaylistId = playlistId },
-                onSettingsClick = { showSettings = true }
+                onPlaylistSelected = { playlistId -> currentPlaylistId = playlistId }
             )
         }
         currentArtist != null -> {
-            // TODO: アーティスト詳細画面
-            HomeScreen(
+            ArtistDetailScreen(
+                artistName = currentArtist!!,
+                onBack = { currentArtist = null },
                 onSongSelected = onSongClick,
                 onAlbumSelected = { album -> currentAlbum = album },
                 onArtistSelected = { artist -> currentArtist = artist },
                 onFolderSelected = { folderPath -> currentFolderPath = folderPath },
-                onPlaylistSelected = { playlistId -> currentPlaylistId = playlistId },
-                onSettingsClick = { showSettings = true }
+                onPlaylistSelected = { playlistId -> currentPlaylistId = playlistId }
             )
         }
         currentFolderPath != null -> {
-            // TODO: フォルダ詳細画面
-            HomeScreen(
+            FolderDetailScreen(
+                folderPath = currentFolderPath!!,
+                onBack = { currentFolderPath = null },
                 onSongSelected = onSongClick,
                 onAlbumSelected = { album -> currentAlbum = album },
                 onArtistSelected = { artist -> currentArtist = artist },
                 onFolderSelected = { folderPath -> currentFolderPath = folderPath },
-                onPlaylistSelected = { playlistId -> currentPlaylistId = playlistId },
-                onSettingsClick = { showSettings = true }
+                onPlaylistSelected = { playlistId -> currentPlaylistId = playlistId }
             )
         }
         currentPlaylistId != null -> {

@@ -137,68 +137,10 @@ class LyricsRepository(
     /**
      * LRCLicからキーワードで歌詞を検索
      * @param keyword 検索キーワード
-     * @param searchType 検索タイプ（"q", "track_name", "artist_name", "album_name"）
-     *                   "q": 任意のフィールドで検索（推奨）
      * @return 検索結果のリスト
      */
-    suspend fun searchLyricsFromLRCLicByKeyword(
-        keyword: String,
-        searchType: String = "q"
-    ): List<LRCLicSearchResult> {
-        return lrcLicApi.searchLyricsByKeyword(keyword, searchType)
-    }
-    
-    /**
-     * LRCLicから歌詞を検索（従来の方法 - 後方互換性のため残す）
-     * @param trackName 曲名
-     * @param artistName アーティスト名
-     * @param albumName アルバム名（オプション）
-     * @return 検索結果のリスト
-     */
-    suspend fun searchLyricsFromLRCLic(
-        trackName: String,
-        artistName: String,
-        albumName: String? = null
-    ): List<LRCLicSearchResult> {
-        return lrcLicApi.searchLyrics(trackName, artistName, albumName)
-    }
-    
-    /**
-     * LRCLicから歌詞を取得して保存
-     * @param songId 曲ID
-     * @param trackName 曲名
-     * @param artistName アーティスト名
-     * @param albumName アルバム名（オプション）
-     * @return 取得に成功した場合true
-     */
-    suspend fun fetchAndSaveLyricsFromLRCLic(
-        songId: Long,
-        trackName: String,
-        artistName: String,
-        albumName: String? = null
-    ): Boolean {
-        return try {
-            val lyrics = lrcLicApi.getLyricsDirect(trackName, artistName, albumName)
-            if (lyrics != null) {
-                val lyricsText = if (lyrics.plainText.isNotEmpty()) {
-                    lyrics.plainText
-                } else if (lyrics.lrc.isNotEmpty()) {
-                    // LRC形式からテキストを抽出
-                    parseLrcFile(lyrics.lrc).joinToString("\n") { it.text }
-                } else {
-                    ""
-                }
-                
-                if (lyricsText.isNotEmpty()) {
-                    saveLyrics(songId, lyricsText, lyrics.lrc.ifEmpty { null }, "lrclic")
-                    return true
-                }
-            }
-            false
-        } catch (e: Exception) {
-            android.util.Log.e("LyricsRepository", "Error fetching lyrics from LRCLic", e)
-            false
-        }
+    suspend fun searchLyricsFromLRCLicByKeyword(keyword: String): List<LRCLicSearchResult> {
+        return lrcLicApi.searchLyricsByKeyword(keyword)
     }
     
     /**

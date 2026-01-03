@@ -116,61 +116,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
     
-    fun searchLyricsFromLRCLic() {
-        viewModelScope.launch {
-            _currentSong.value?.let { song ->
-                _isSearching.value = true
-                try {
-                    val results = lyricsRepository.searchLyricsFromLRCLic(
-                        trackName = song.title,
-                        artistName = song.artist,
-                        albumName = song.album
-                    )
-                    _searchResults.value = results
-                } catch (e: Exception) {
-                    android.util.Log.e("PlayerViewModel", "Error searching lyrics", e)
-                    _searchResults.value = emptyList()
-                } finally {
-                    _isSearching.value = false
-                }
-            }
-        }
-    }
-    
-    fun searchLyricsFromLRCLicManual(
-        trackName: String,
-        artistName: String,
-        albumName: String? = null
-    ) {
+    fun searchLyricsFromLRCLicByKeyword(keyword: String) {
         viewModelScope.launch {
             _isSearching.value = true
             try {
-                val results = lyricsRepository.searchLyricsFromLRCLic(
-                    trackName = trackName,
-                    artistName = artistName,
-                    albumName = albumName
-                )
-                _searchResults.value = results
-            } catch (e: Exception) {
-                android.util.Log.e("PlayerViewModel", "Error searching lyrics", e)
-                _searchResults.value = emptyList()
-            } finally {
-                _isSearching.value = false
-            }
-        }
-    }
-    
-    fun searchLyricsFromLRCLicByKeyword(
-        keyword: String,
-        searchType: String = "q"
-    ) {
-        viewModelScope.launch {
-            _isSearching.value = true
-            try {
-                val results = lyricsRepository.searchLyricsFromLRCLicByKeyword(
-                    keyword = keyword,
-                    searchType = searchType
-                )
+                val results = lyricsRepository.searchLyricsFromLRCLicByKeyword(keyword)
                 _searchResults.value = results
             } catch (e: Exception) {
                 android.util.Log.e("PlayerViewModel", "Error searching lyrics by keyword", e)
@@ -200,34 +150,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 } finally {
                     _isFetchingLyrics.value = false
                     _searchResults.value = emptyList()
-                }
-            }
-        }
-    }
-    
-    fun fetchLyricsFromLRCLicDirect() {
-        viewModelScope.launch {
-            _currentSong.value?.let { song ->
-                _isFetchingLyrics.value = true
-                _lyricsMessage.value = null
-                try {
-                    val success = lyricsRepository.fetchAndSaveLyricsFromLRCLic(
-                        songId = song.id,
-                        trackName = song.title,
-                        artistName = song.artist,
-                        albumName = song.album
-                    )
-                    if (success) {
-                        loadLyrics(song.id, song.filePath)
-                        _lyricsMessage.value = "歌詞を取得しました"
-                    } else {
-                        _lyricsMessage.value = "歌詞が見つかりませんでした"
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("PlayerViewModel", "Error fetching lyrics directly", e)
-                    _lyricsMessage.value = "エラー: ${e.message ?: "歌詞の取得に失敗しました"}"
-                } finally {
-                    _isFetchingLyrics.value = false
                 }
             }
         }

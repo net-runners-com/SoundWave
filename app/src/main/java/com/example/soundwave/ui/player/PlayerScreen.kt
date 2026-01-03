@@ -2,6 +2,7 @@
 
 package com.example.soundwave.ui.player
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,7 +10,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -19,7 +22,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.soundwave.data.repository.LRCLicSearchResult
 import com.example.soundwave.data.repository.LyricLine
@@ -52,6 +63,7 @@ fun PlayerScreen(
     
     var showLyrics by remember { mutableStateOf(false) }
     var showSearchDialog by remember { mutableStateOf(false) }
+    var showEffectDialog by remember { mutableStateOf(false) }
     
     val snackbarHostState = remember { SnackbarHostState() }
     
@@ -60,6 +72,11 @@ fun PlayerScreen(
         lyricsMessage?.let { message ->
             snackbarHostState.showSnackbar(message)
             playerViewModel.clearLyricsMessage()
+            // 歌詞取得が成功した場合、検索ダイアログを閉じる
+            if (message.contains("取得しました") || message.contains("保存しました")) {
+                kotlinx.coroutines.delay(500) // メッセージ表示後に閉じる
+                showSearchDialog = false
+            }
         }
     }
     
@@ -113,80 +130,212 @@ fun PlayerScreen(
             SnackbarHost(hostState = snackbarHostState)
         }
     ) { paddingValues ->
-        if (showLyrics) {
-            LyricsView(
-                currentLyrics = currentLyrics,
-                currentLyricLines = currentLyricLines,
-                currentPosition = currentPosition,
-                currentSong = currentSong,
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            // 背景：アルバムアートをぼかして表示（歌詞がある場合のみ）
+            val albumArtPath = currentSong?.albumArtPath
+            if (showLyrics && albumArtPath != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .blur(50.dp)
+                        .scale(1.2f)
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(albumArtPath)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                
+                // 暗いオーバーレイ
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.7f),
+                                    Color.Black.copy(alpha = 0.8f),
+                                    Color.Black.copy(alpha = 0.9f)
+                                )
+                            )
+                        )
+                )
+            }
+            
+            // メインコンテンツ（再生コントロールなど）
+            if (showLyrics) {
+                // 歌詞表示時のレイアウト
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // 上部：曲名とアーティスト名（固定領域）
+                    Spacer(modifier = Modifier.height(16.dp))
+                    LyricsHeaderSection(song = currentSong)
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    // 中央：歌詞表示領域（タイトルとコントロールの間）
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (currentLyrics != null) {
+                            LyricsBackgroundView(
+                                currentLyricLines = currentLyricLines,
+                                currentPosition = currentPosition,
+                                currentLyrics = currentLyrics,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            // 歌詞がない場合：歌詞取得UI
+                            LyricsEmptyState(
+                                isSearching = isSearching,
+                                isFetchingLyrics = isFetchingLyrics,
+                                onSearchClick = { showSearchDialog = true },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                    
+                    // 下部：再生コントロール（固定領域）
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // 再生コントロール
+                        PlaybackControlsSection(
+                            isPlaying = isPlaying,
+                            onPlayPause = { playerViewModel.playPause() },
+                            onSkipNext = { playerViewModel.skipNext() },
+                            onSkipPrevious = { playerViewModel.skipPrevious() }
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // シークバー
+                        SeekBarSection(
+                            currentPosition = currentPosition,
+                            duration = duration,
+                            onSeek = { playerViewModel.seekTo(it.toLong()) }
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // その他のコントロール
+                        AdditionalControlsSection(
+                            hasLyrics = currentLyrics != null,
+                            showLyrics = showLyrics,
+                            repeatMode = repeatMode,
+                            onLyricsClick = { 
+                                if (currentLyrics == null) {
+                                    showSearchDialog = true
+                                } else {
+                                    showLyrics = !showLyrics
+                                }
+                            },
+                            onShuffleClick = { playerViewModel.toggleShuffle() },
+                            onRepeatClick = { playerViewModel.toggleRepeat() },
+                            onEffectClick = { showEffectDialog = true }
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            } else {
+                // 通常時のレイアウト
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    // アルバムアート
+                    AlbumArtSection(song = currentSong)
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    // 曲情報
+                    SongInfoSection(song = currentSong)
+                    
+                    Spacer(modifier = Modifier.height(32.dp))
+                    
+                    // シークバー
+                    SeekBarSection(
+                        currentPosition = currentPosition,
+                        duration = duration,
+                        onSeek = { playerViewModel.seekTo(it.toLong()) }
+                    )
+                    
+                    Spacer(modifier = Modifier.height(32.dp))
+                    
+                    // 再生コントロール
+                    PlaybackControlsSection(
+                        isPlaying = isPlaying,
+                        onPlayPause = { playerViewModel.playPause() },
+                        onSkipNext = { playerViewModel.skipNext() },
+                        onSkipPrevious = { playerViewModel.skipPrevious() }
+                    )
+                    
+                    Spacer(modifier = Modifier.height(32.dp))
+                    
+                    // その他のコントロール
+                    AdditionalControlsSection(
+                        hasLyrics = currentLyrics != null,
+                        showLyrics = showLyrics,
+                        repeatMode = repeatMode,
+                        onLyricsClick = { 
+                            if (currentLyrics == null) {
+                                // 歌詞がない場合は検索ダイアログを開く
+                                showSearchDialog = true
+                            } else {
+                                // 歌詞がある場合は表示/非表示を切り替え
+                                showLyrics = !showLyrics
+                            }
+                        },
+                        onShuffleClick = { playerViewModel.toggleShuffle() },
+                        onRepeatClick = { playerViewModel.toggleRepeat() },
+                        onEffectClick = { showEffectDialog = true }
+                    )
+                }
+            }
+        }
+        
+        // 検索結果ダイアログ
+        if (showSearchDialog) {
+            LyricsSearchDialog(
                 searchResults = searchResults,
                 isSearching = isSearching,
                 isFetchingLyrics = isFetchingLyrics,
-                showSearchDialog = showSearchDialog,
-                onBack = { showLyrics = false },
-                onSearchClick = {
-                    showSearchDialog = true
-                    playerViewModel.searchLyricsFromLRCLic()
-                },
+                initialKeyword = currentSong?.title ?: "",
+                onDismiss = { showSearchDialog = false },
                 onSelectLyrics = { lyricsId ->
                     playerViewModel.fetchLyricsFromLRCLic(lyricsId)
-                    showSearchDialog = false
                 },
-                onSearch = { keyword, searchType ->
-                    playerViewModel.searchLyricsFromLRCLicByKeyword(keyword, searchType)
-                },
-                onDismissSearch = { showSearchDialog = false },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
+                onSearch = { keyword ->
+                    playerViewModel.searchLyricsFromLRCLicByKeyword(keyword)
+                }
             )
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                // アルバムアート
-                AlbumArtSection(song = currentSong)
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                // 曲情報
-                SongInfoSection(song = currentSong)
-                
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                // シークバー
-                SeekBarSection(
-                    currentPosition = currentPosition,
-                    duration = duration,
-                    onSeek = { playerViewModel.seekTo(it.toLong()) }
-                )
-                
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                // 再生コントロール
-                PlaybackControlsSection(
-                    isPlaying = isPlaying,
-                    onPlayPause = { playerViewModel.playPause() },
-                    onSkipNext = { playerViewModel.skipNext() },
-                    onSkipPrevious = { playerViewModel.skipPrevious() }
-                )
-                
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                // その他のコントロール
-                AdditionalControlsSection(
-                    hasLyrics = currentLyrics != null,
-                    repeatMode = repeatMode,
-                    onLyricsClick = { showLyrics = true },
-                    onShuffleClick = { playerViewModel.toggleShuffle() },
-                    onRepeatClick = { playerViewModel.toggleRepeat() }
-                )
-            }
+        }
+        
+        // エフェクト設定ダイアログ
+        if (showEffectDialog) {
+            AudioEffectDialog(
+                onDismiss = { showEffectDialog = false }
+            )
         }
     }
 }
@@ -199,18 +348,10 @@ private fun LyricsSearchDialog(
     initialKeyword: String = "",
     onDismiss: () -> Unit,
     onSelectLyrics: (String) -> Unit,
-    onSearch: (String, String) -> Unit
+    onSearch: (String) -> Unit
 ) {
     var keyword by remember { mutableStateOf(initialKeyword) }
-    var searchType by remember { mutableStateOf("q") }
     var hasSearched by remember { mutableStateOf(false) }
-    
-    val searchTypeOptions = listOf(
-        "q" to "キーワード",
-        "track_name" to "曲名",
-        "artist_name" to "アーティスト名",
-        "album_name" to "アルバム名"
-    )
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -223,53 +364,15 @@ private fun LyricsSearchDialog(
                     .fillMaxWidth()
                     .heightIn(max = 500.dp)
             ) {
-                // 検索タイプ選択
-                Text(
-                    text = "検索タイプ",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    searchTypeOptions.forEach { (type, label) ->
-                        FilterChip(
-                            selected = searchType == type,
-                            onClick = { searchType = type },
-                            label = { Text(label) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
                 // 検索キーワード
                 OutlinedTextField(
                     value = keyword,
                     onValueChange = { keyword = it },
                     label = { 
-                        Text(
-                            when (searchType) {
-                                "q" -> "キーワードで検索"
-                                "track_name" -> "曲名で検索"
-                                "artist_name" -> "アーティスト名で検索"
-                                "album_name" -> "アルバム名で検索"
-                                else -> "キーワードで検索"
-                            }
-                        )
+                        Text("キーワードで検索")
                     },
                     placeholder = {
-                        Text(
-                            when (searchType) {
-                                "q" -> "例: 曲名、アーティスト名、アルバム名など"
-                                "track_name" -> "例: 曲名を入力"
-                                "artist_name" -> "例: アーティスト名を入力"
-                                "album_name" -> "例: アルバム名を入力"
-                                else -> "例: キーワードを入力"
-                            }
-                        )
+                        Text("曲名など")
                     },
                     leadingIcon = {
                         Icon(Icons.Default.Search, contentDescription = null)
@@ -285,28 +388,13 @@ private fun LyricsSearchDialog(
                     onClick = {
                         if (keyword.isNotBlank()) {
                             hasSearched = true
-                            onSearch(keyword, searchType)
+                            onSearch(keyword)
                         }
                     },
                     enabled = !isSearching && keyword.isNotBlank(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    if (isSearching) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("検索中...")
-                    } else {
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("検索")
-                    }
+                    Text("検索")
                 }
                 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -317,21 +405,32 @@ private fun LyricsSearchDialog(
                 
                 // 歌詞取得中表示
                 if (isFetchingLyrics) {
-                    Row(
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(vertical = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
                     ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "歌詞を取得中...",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "歌詞を取得中...",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
                     }
                 }
                 
@@ -437,17 +536,53 @@ private fun AlbumArtSection(song: com.example.soundwave.data.database.SongEntity
 }
 
 @Composable
+private fun LyricsHeaderSection(song: com.example.soundwave.data.database.SongEntity?) {
+    song?.let {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = it.title,
+                style = MaterialTheme.typography.headlineLarge,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = it.artist,
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White.copy(alpha = 0.9f),
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
 private fun SongInfoSection(song: com.example.soundwave.data.database.SongEntity?) {
     song?.let {
         Text(
             text = it.title,
-            style = MaterialTheme.typography.headlineMedium
+            style = MaterialTheme.typography.headlineMedium,
+            minLines = 2,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "${it.artist} - ${it.album}",
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            minLines = 1,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }
@@ -514,12 +649,177 @@ private fun PlaybackControlsSection(
 }
 
 @Composable
+private fun LyricsBackgroundView(
+    currentLyricLines: List<LyricLine>,
+    currentPosition: Long,
+    currentLyrics: com.example.soundwave.data.database.LyricsEntity?,
+    modifier: Modifier = Modifier
+) {
+    val listState = rememberLazyListState()
+    
+    // 現在の再生位置に基づいてスクロール位置を更新
+    LaunchedEffect(currentPosition, currentLyricLines) {
+        if (currentLyricLines.isNotEmpty()) {
+            val currentIndex = currentLyricLines.indexOfFirst { it.time > currentPosition }
+            if (currentIndex > 0) {
+                listState.animateScrollToItem((currentIndex - 1).coerceAtLeast(0))
+            }
+        }
+    }
+    
+    if (currentLyricLines.isNotEmpty()) {
+        // LRC形式の歌詞（タイムスタンプ付き）
+        LazyColumn(
+            state = listState,
+            modifier = modifier,
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            itemsIndexed(currentLyricLines) { index, line ->
+                val isCurrentLine = line.time <= currentPosition && 
+                    (index == currentLyricLines.size - 1 || currentLyricLines[index + 1].time > currentPosition)
+                
+                Text(
+                    text = line.text,
+                    style = if (isCurrentLine) {
+                        MaterialTheme.typography.headlineLarge.copy(
+                            color = Color.White
+                        )
+                    } else {
+                        MaterialTheme.typography.titleMedium.copy(
+                            color = Color.White.copy(alpha = 0.5f)
+                        )
+                    },
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                )
+            }
+        }
+    } else if (currentLyrics != null) {
+        // プレーンテキストの歌詞
+        LazyColumn(
+            modifier = modifier,
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            items(currentLyrics.lyricsText.lines()) { line ->
+                if (line.isNotBlank()) {
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White.copy(alpha = 0.3f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LyricsEmptyState(
+    isSearching: Boolean,
+    isFetchingLyrics: Boolean,
+    onSearchClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Default.TextFields,
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = Color.White.copy(alpha = 0.6f)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "歌詞がありません",
+            style = MaterialTheme.typography.titleLarge,
+            color = Color.White
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "同じフォルダに.lrcファイルを配置すると\n自動的に読み込まれます",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(alpha = 0.7f),
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        if (isFetchingLyrics) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "歌詞を取得中...",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+        } else {
+            Button(
+                onClick = onSearchClick,
+                enabled = !isSearching,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = Color.Black
+                )
+            ) {
+                if (isSearching) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = Color.Black
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("検索中...")
+                } else {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("LRCLicから検索")
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun AdditionalControlsSection(
     hasLyrics: Boolean = false,
+    showLyrics: Boolean = false,
     repeatMode: com.example.soundwave.player.RepeatMode = com.example.soundwave.player.RepeatMode.NONE,
     onLyricsClick: () -> Unit = {},
     onShuffleClick: () -> Unit = {},
-    onRepeatClick: () -> Unit = {}
+    onRepeatClick: () -> Unit = {},
+    onEffectClick: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -559,14 +859,14 @@ private fun AdditionalControlsSection(
             Icon(
                 Icons.Default.TextFields,
                 contentDescription = "歌詞",
-                tint = if (hasLyrics) {
+                tint = if (hasLyrics && showLyrics) {
                     MaterialTheme.colorScheme.primary
                 } else {
                     MaterialTheme.colorScheme.onSurface
                 }
             )
         }
-        IconButton(onClick = { /* TODO: エフェクト */ }) {
+        IconButton(onClick = onEffectClick) {
             Icon(Icons.Default.GraphicEq, contentDescription = "エフェクト")
         }
     }
@@ -585,10 +885,11 @@ private fun LyricsView(
     onBack: () -> Unit,
     onSearchClick: () -> Unit,
     onSelectLyrics: (String) -> Unit,
-    onSearch: (String, String) -> Unit,
+    onSearch: (String) -> Unit,
     onDismissSearch: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val listState = rememberLazyListState()
     
     // 現在の再生位置に基づいてスクロール位置を更新
@@ -601,124 +902,204 @@ private fun LyricsView(
         }
     }
     
-    Column(modifier = modifier) {
-        // ヘッダー
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "戻る")
+    Box(modifier = modifier.fillMaxSize()) {
+        // 背景：アルバムアートをぼかして表示
+        currentSong?.albumArtPath?.let { albumArtPath ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(50.dp)
+                    .scale(1.2f)
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(albumArtPath)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "歌詞",
-                style = MaterialTheme.typography.titleLarge
-            )
         }
         
-        Divider()
-        
-        // 歌詞表示
-        if (currentLyrics != null) {
-            if (currentLyricLines.isNotEmpty()) {
-                // LRC形式の歌詞（タイムスタンプ付き）
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    itemsIndexed(currentLyricLines) { index, line ->
-                        val isCurrentLine = line.time <= currentPosition && 
-                            (index == currentLyricLines.size - 1 || currentLyricLines[index + 1].time > currentPosition)
-                        
-                        Text(
-                            text = line.text,
-                            style = if (isCurrentLine) {
-                                MaterialTheme.typography.bodyLarge.copy(
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            } else {
-                                MaterialTheme.typography.bodyMedium.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            },
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
+        // 暗いオーバーレイ
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.7f),
+                            Color.Black.copy(alpha = 0.8f),
+                            Color.Black.copy(alpha = 0.9f)
                         )
+                    )
+                )
+        )
+        
+        // コンテンツ
+        Column(modifier = Modifier.fillMaxSize()) {
+            // ヘッダー（上部に小さなアルバムアート、曲名、アーティスト名）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 小さなアルバムアート
+                currentSong?.albumArtPath?.let { albumArtPath ->
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(albumArtPath)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(MaterialTheme.shapes.small),
+                        contentScale = ContentScale.Crop
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+                
+                // 曲名とアーティスト名
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = currentSong?.title ?: "",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = currentSong?.artist ?: "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.8f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                
+                // メニューボタン（戻るボタン）
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = "閉じる",
+                        tint = Color.White
+                    )
+                }
+            }
+            
+            // 歌詞表示
+            if (currentLyrics != null) {
+                if (currentLyricLines.isNotEmpty()) {
+                    // LRC形式の歌詞（タイムスタンプ付き）
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 32.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        itemsIndexed(currentLyricLines) { index, line ->
+                            val isCurrentLine = line.time <= currentPosition && 
+                                (index == currentLyricLines.size - 1 || currentLyricLines[index + 1].time > currentPosition)
+                            
+                            Text(
+                                text = line.text,
+                                style = if (isCurrentLine) {
+                                    MaterialTheme.typography.headlineMedium.copy(
+                                        color = Color.White
+                                    )
+                                } else {
+                                    MaterialTheme.typography.bodyLarge.copy(
+                                        color = Color.White.copy(alpha = 0.6f)
+                                    )
+                                },
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp)
+                            )
+                        }
+                    }
+                } else {
+                    // プレーンテキストの歌詞
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        items(currentLyrics.lyricsText.lines()) { line ->
+                            if (line.isNotBlank()) {
+                                Text(
+                                    text = line,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = Color.White.copy(alpha = 0.8f),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp)
+                                )
+                            }
+                        }
                     }
                 }
             } else {
-                // プレーンテキストの歌詞
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                // 歌詞がない場合
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = currentLyrics.lyricsText,
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        } else {
-            // 歌詞がない場合
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Icon(
-                        Icons.Default.TextFields,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "歌詞がありません",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "同じフォルダに.lrcファイルを配置すると\n自動的に読み込まれます",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Button(
-                        onClick = onSearchClick,
-                        enabled = !isSearching && currentSong != null
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(24.dp)
                     ) {
-                        if (isSearching) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                color = MaterialTheme.colorScheme.onPrimary
+                        Icon(
+                            Icons.Default.TextFields,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = Color.White.copy(alpha = 0.6f)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "歌詞がありません",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "同じフォルダに.lrcファイルを配置すると\n自動的に読み込まれます",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Button(
+                            onClick = onSearchClick,
+                            enabled = !isSearching && currentSong != null,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White,
+                                contentColor = Color.Black
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("検索中...")
-                        } else {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("LRCLicから検索")
+                        ) {
+                            if (isSearching) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = Color.Black
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("検索中...")
+                            } else {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("LRCLicから検索")
+                            }
                         }
                     }
                 }

@@ -30,6 +30,8 @@ class MusicRepository(
     
     fun getSongsByArtist(artist: String): Flow<List<SongEntity>> = songDao.getSongsByArtist(artist)
     
+    fun getSongsByFolder(folderPath: String): Flow<List<SongEntity>> = songDao.getSongsByFolder(folderPath)
+    
     fun getAllAlbums(): Flow<List<String>> = songDao.getAllAlbums()
     
     fun getAllArtists(): Flow<List<String>> = songDao.getAllArtists()

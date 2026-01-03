@@ -9,6 +9,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.security.MessageDigest
 
 data class LRCLicSearchResult(
     val id: String,
@@ -27,6 +28,27 @@ class LRCLicApi {
         private const val BASE_URL = "https://lrclib.net/api"
         private const val SEARCH_ENDPOINT = "$BASE_URL/search"
         private const val GET_LYRICS_ENDPOINT = "$BASE_URL/get"
+        private const val APP_NAME = "SoundWave"
+        private const val APP_VERSION = "1.0"
+        private const val APP_PACKAGE = "com.example.soundwave"
+        
+        /**
+         * User-Agent用のハッシュ値を生成
+         */
+        private fun generateHash(): String {
+            val input = "$APP_PACKAGE-$APP_VERSION-${System.currentTimeMillis() / (1000 * 60 * 60 * 24)}" // 日単位でハッシュを生成
+            val digest = MessageDigest.getInstance("MD5")
+            val hashBytes = digest.digest(input.toByteArray())
+            return hashBytes.joinToString("") { "%02x".format(it) }.take(8) // 8文字のハッシュ
+        }
+        
+        /**
+         * User-Agent文字列を生成
+         */
+        private fun getUserAgent(): String {
+            val hash = generateHash()
+            return "$APP_NAME/$APP_VERSION (hash: $hash)"
+        }
     }
     
     /**
@@ -35,41 +57,17 @@ class LRCLicApi {
      * エンドポイント: GET /api/search
      * 
      * @param keyword 検索キーワード
-     * @param searchType 検索タイプ（q, track_name, artist_name, album_name）
-     *                   q: 任意のフィールド（曲名、アーティスト名、アルバム名）で検索
      * @return 検索結果のリスト
      */
-    suspend fun searchLyricsByKeyword(
-        keyword: String,
-        searchType: String = "q"
-    ): List<LRCLicSearchResult> = withContext(Dispatchers.IO) {
+    suspend fun searchLyricsByKeyword(keyword: String): List<LRCLicSearchResult> = withContext(Dispatchers.IO) {
         try {
             if (keyword.isBlank()) {
                 return@withContext emptyList()
             }
             
             val encodedKeyword = URLEncoder.encode(keyword.trim(), "UTF-8")
-            // API仕様に基づいてパラメータを設定
-            // q または track_name の少なくとも1つが必須
-            val queryParams = when (searchType) {
-                "q" -> {
-                    // キーワード検索: 任意のフィールドで検索
-                    "q=$encodedKeyword"
-                }
-                "track_name" -> {
-                    // 曲名で検索
-                    "track_name=$encodedKeyword"
-                }
-                "artist_name" -> {
-                    // アーティスト名で検索（track_nameも必須のため、qを使用）
-                    "q=$encodedKeyword"
-                }
-                "album_name" -> {
-                    // アルバム名で検索（track_nameも必須のため、qを使用）
-                    "q=$encodedKeyword"
-                }
-                else -> "q=$encodedKeyword"
-            }
+            // キーワード検索: 任意のフィールド（曲名、アーティスト名、アルバム名）で検索
+            val queryParams = "q=$encodedKeyword"
             
             val url = URL("$SEARCH_ENDPOINT?$queryParams")
             android.util.Log.d("LRCLicApi", "Search URL: $url")
@@ -77,11 +75,20 @@ class LRCLicApi {
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
             connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("User-Agent", "SoundWave/1.0")
+            connection.setRequestProperty("User-Agent", getUserAgent())
+            connection.setRequestProperty("Connection", "close")
             connection.connectTimeout = 10000
             connection.readTimeout = 10000
             
-            val responseCode = connection.responseCode
+            val responseCode = try {
+                connection.connect()
+                connection.responseCode
+            } catch (e: IOException) {
+                android.util.Log.e("LRCLicApi", "Connection error: ${e.message}", e)
+                connection.disconnect()
+                return@withContext emptyList()
+            }
+            
             android.util.Log.d("LRCLicApi", "Response code: $responseCode")
             
             if (responseCode == HttpURLConnection.HTTP_OK) {
@@ -99,107 +106,6 @@ class LRCLicApi {
                 
                 for (i in 0 until jsonArray.length()) {
                     val item = jsonArray.getJSONObject(i)
-                    val id = item.optString("id", "") ?: item.optLong("id", 0).toString()
-                    val title = item.optString("trackName", "") ?: item.optString("track_name", "") ?: item.optString("name", "")
-                    val artist = item.optString("artistName", "") ?: item.optString("artist_name", "") ?: item.optString("artist", "")
-                    val album = item.optString("albumName", null) ?: item.optString("album_name", null) ?: item.optString("album", null)
-                    
-                    if (id.isNotEmpty() && title.isNotEmpty()) {
-                        results.add(
-                            LRCLicSearchResult(
-                                id = id,
-                                title = title,
-                                artist = artist.ifEmpty { "Unknown Artist" },
-                                album = album
-                            )
-                        )
-                    }
-                }
-                
-                android.util.Log.d("LRCLicApi", "Found ${results.size} results")
-                return@withContext results
-            } else {
-                val errorResponse = try {
-                    connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-                } catch (e: Exception) {
-                    ""
-                }
-                android.util.Log.e("LRCLicApi", "Search failed with code: $responseCode, response: $errorResponse")
-                connection.disconnect()
-                return@withContext emptyList()
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("LRCLicApi", "Error searching lyrics", e)
-            return@withContext emptyList()
-        }
-    }
-    
-    /**
-     * 歌詞を検索（従来の方法 - 後方互換性のため残す）
-     * LRCLib APIドキュメント: https://lrclib.net/docs
-     * エンドポイント: GET /api/search
-     * パラメータ: track_name, artist_name, album_name (オプション)
-     * 
-     * @param trackName 曲名
-     * @param artistName アーティスト名
-     * @param albumName アルバム名（オプション）
-     * @return 検索結果のリスト
-     */
-    suspend fun searchLyrics(
-        trackName: String,
-        artistName: String,
-        albumName: String? = null
-    ): List<LRCLicSearchResult> = withContext(Dispatchers.IO) {
-        try {
-            // パラメータが空の場合は検索しない
-            if (trackName.isBlank() && artistName.isBlank()) {
-                return@withContext emptyList()
-            }
-            
-            val queryParams = buildString {
-                if (trackName.isNotBlank()) {
-                    append("track_name=${URLEncoder.encode(trackName.trim(), "UTF-8")}")
-                }
-                if (artistName.isNotBlank()) {
-                    if (isNotEmpty()) append("&")
-                    append("artist_name=${URLEncoder.encode(artistName.trim(), "UTF-8")}")
-                }
-                if (!albumName.isNullOrBlank()) {
-                    if (isNotEmpty()) append("&")
-                    append("album_name=${URLEncoder.encode(albumName.trim(), "UTF-8")}")
-                }
-            }
-            
-            val url = URL("$SEARCH_ENDPOINT?$queryParams")
-            android.util.Log.d("LRCLicApi", "Search URL: $url")
-            
-            val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("User-Agent", "SoundWave/1.0")
-            connection.connectTimeout = 10000
-            connection.readTimeout = 10000
-            
-            val responseCode = connection.responseCode
-            android.util.Log.d("LRCLicApi", "Response code: $responseCode")
-            
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                val response = connection.inputStream.bufferedReader().use { it.readText() }
-                connection.disconnect()
-                
-                android.util.Log.d("LRCLicApi", "Response: $response")
-                
-                // レスポンスが空の場合は空リストを返す
-                if (response.isBlank()) {
-                    return@withContext emptyList()
-                }
-                
-                val jsonArray = JSONArray(response)
-                val results = mutableListOf<LRCLicSearchResult>()
-                
-                for (i in 0 until jsonArray.length()) {
-                    val item = jsonArray.getJSONObject(i)
-                    // LRCLib APIのレスポンス形式に合わせてフィールド名を確認
                     val id = item.optString("id", "") ?: item.optLong("id", 0).toString()
                     val title = item.optString("trackName", "") ?: item.optString("track_name", "") ?: item.optString("name", "")
                     val artist = item.optString("artistName", "") ?: item.optString("artist_name", "") ?: item.optString("artist", "")
@@ -253,13 +159,13 @@ class LRCLicApi {
         
         repeat(maxRetries) { attempt ->
             try {
-                val url = URL("$GET_LYRICS_ENDPOINT?id=$lyricsId")
+                val url = URL("$GET_LYRICS_ENDPOINT/$lyricsId")
                 android.util.Log.d("LRCLicApi", "Get lyrics URL: $url (attempt ${attempt + 1}/$maxRetries)")
                 
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"
                 connection.setRequestProperty("Accept", "application/json")
-                connection.setRequestProperty("User-Agent", "SoundWave/1.0")
+                connection.setRequestProperty("User-Agent", getUserAgent())
                 connection.setRequestProperty("Connection", "close")
                 connection.connectTimeout = 15000
                 connection.readTimeout = 15000
@@ -359,23 +265,5 @@ class LRCLicApi {
         return@withContext null
     }
     
-    /**
-     * 曲名とアーティスト名から直接歌詞を取得（最初の検索結果を使用）
-     * @param trackName 曲名
-     * @param artistName アーティスト名
-     * @param albumName アルバム名（オプション）
-     * @return 歌詞データ
-     */
-    suspend fun getLyricsDirect(
-        trackName: String,
-        artistName: String,
-        albumName: String? = null
-    ): LRCLicLyrics? {
-        val searchResults = searchLyrics(trackName, artistName, albumName)
-        if (searchResults.isNotEmpty()) {
-            return getLyrics(searchResults[0].id)
-        }
-        return null
-    }
 }
 
