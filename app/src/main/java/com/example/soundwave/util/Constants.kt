@@ -5,6 +5,8 @@ object Constants {
     const val NOTIFICATION_CHANNEL_NAME = "Music Player"
     const val NOTIFICATION_ID = 1
     const val ACTION_PLAY_PAUSE = "com.example.soundwave.PLAY_PAUSE"
+    const val ACTION_PREVIOUS = "com.example.soundwave.PREVIOUS"
+    const val ACTION_NEXT = "com.example.soundwave.NEXT"
     
     const val POSITION_UPDATE_INTERVAL_MS = 100L
 }

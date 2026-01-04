@@ -15,6 +15,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -628,7 +630,11 @@ private fun PlaybackControlsSection(
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onSkipPrevious) {
-            Icon(Icons.Default.SkipPrevious, contentDescription = "前の曲")
+            Icon(
+                imageVector = Icons.Default.SkipPrevious,
+                contentDescription = "前の曲",
+                modifier = Modifier.size(24.dp)
+            )
         }
         
         Spacer(modifier = Modifier.width(16.dp))
@@ -643,7 +649,11 @@ private fun PlaybackControlsSection(
         Spacer(modifier = Modifier.width(16.dp))
         
         IconButton(onClick = onSkipNext) {
-            Icon(Icons.Default.SkipNext, contentDescription = "次の曲")
+            Icon(
+                imageVector = Icons.Default.SkipNext,
+                contentDescription = "次の曲",
+                modifier = Modifier.size(24.dp)
+            )
         }
     }
 }

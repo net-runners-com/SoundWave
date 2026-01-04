@@ -9,12 +9,23 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import androidx.media.app.NotificationCompat as MediaNotificationCompat
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerNotificationManager
+import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaStyleNotificationHelper
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.net.Uri
+import coil.ImageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
+import kotlinx.coroutines.runBlocking
 import com.example.soundwave.MainActivity
 import com.example.soundwave.R
 import com.example.soundwave.data.AppDatabaseModule
@@ -27,10 +38,14 @@ import kotlinx.coroutines.launch
 
 class MusicPlayerService : Service() {
     private var exoPlayer: ExoPlayer? = null
+    private var mediaSession: MediaSession? = null
     private val binder = MusicBinder()
     
     private var currentSongId: Long? = null
     private var repeatMode: RepeatMode = RepeatMode.NONE
+    private var currentSongTitle: String? = null
+    private var currentSongArtist: String? = null
+    private var currentAlbumArtPath: String? = null
     
     private val audioEffectManager by lazy {
         AudioEffectManager(applicationContext)
@@ -49,6 +64,7 @@ class MusicPlayerService : Service() {
         super.onCreate()
         createNotificationChannel()
         initializePlayer()
+        initializeMediaSession()
     }
     
     override fun onBind(intent: Intent?): IBinder {
@@ -57,22 +73,44 @@ class MusicPlayerService : Service() {
     
     private fun initializePlayer() {
         try {
-            exoPlayer = ExoPlayer.Builder(applicationContext).build().apply {
-                addListener(object : Player.Listener {
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        when (playbackState) {
-                            Player.STATE_READY -> {
-                                updateNotification()
-                            }
-                            Player.STATE_ENDED -> {
-                                handlePlaybackEnded()
+            exoPlayer = ExoPlayer.Builder(applicationContext)
+                .setHandleAudioBecomingNoisy(true) // ヘッドフォンが外れたときに自動停止
+                .setWakeMode(androidx.media3.common.C.WAKE_MODE_NETWORK) // ネットワーク再生時のウェイクロック
+                .build()
+                .apply {
+                    addListener(object : Player.Listener {
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            when (playbackState) {
+                                Player.STATE_READY -> {
+                                    updateNotification()
+                                }
+                                Player.STATE_ENDED -> {
+                                    handlePlaybackEnded()
+                                }
                             }
                         }
-                    }
-                })
-            }
+                        
+                        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                            android.util.Log.e("MusicPlayerService", "Playback error: ${error.message}", error)
+                            // エラーが発生した場合の処理
+                            error.cause?.let {
+                                android.util.Log.e("MusicPlayerService", "Error cause: ${it.message}", it)
+                            }
+                        }
+                    })
+                }
         } catch (e: Exception) {
             android.util.Log.e("MusicPlayerService", "Failed to initialize ExoPlayer", e)
+        }
+    }
+    
+    private fun initializeMediaSession() {
+        exoPlayer?.let { player ->
+            try {
+                mediaSession = MediaSession.Builder(this, player).build()
+            } catch (e: Exception) {
+                android.util.Log.e("MusicPlayerService", "Failed to initialize MediaSession", e)
+            }
         }
     }
     
@@ -80,27 +118,105 @@ class MusicPlayerService : Service() {
         if (exoPlayer == null) {
             android.util.Log.w("MusicPlayerService", "ExoPlayer is null, initializing...")
             initializePlayer()
+            initializeMediaSession()
         }
         
         exoPlayer?.let { player ->
             try {
                 val uri = android.net.Uri.parse("file://$filePath")
                 android.util.Log.d("MusicPlayerService", "Playing song: $filePath")
-                val mediaItem = MediaItem.fromUri(uri)
-                player.setMediaItem(mediaItem)
-                player.prepare()
-                player.play()
+                
                 currentSongId = songId
+                
+                // 曲情報を取得してから再生
+                serviceScope.launch {
+                    try {
+                        val song = musicRepository.getSongById(songId)
+                        song?.let {
+                            currentSongTitle = it.title
+                            currentSongArtist = it.artist
+                            currentAlbumArtPath = it.albumArtPath
+                            
+                            // MediaItemにメタデータを設定
+                            val artworkUri = if (it.albumArtPath.isNullOrBlank()) {
+                                null
+                            } else {
+                                try {
+                                    // file://スキームが既にある場合はそのまま、ない場合は追加
+                                    if (it.albumArtPath.startsWith("file://") || it.albumArtPath.startsWith("content://")) {
+                                        Uri.parse(it.albumArtPath)
+                                    } else {
+                                        Uri.parse("file://${it.albumArtPath}")
+                                    }
+                                } catch (e: Exception) {
+                                    android.util.Log.w("MusicPlayerService", "Failed to parse album art URI: ${it.albumArtPath}", e)
+                                    null
+                                }
+                            }
+                            
+                            val mediaItem = MediaItem.Builder()
+                                .setUri(uri)
+                                .setMediaMetadata(
+                                    MediaMetadata.Builder()
+                                        .setTitle(it.title)
+                                        .setArtist(it.artist)
+                                        .setAlbumTitle(it.album)
+                                        .setArtworkUri(artworkUri)
+                                        .build()
+                                )
+                                .build()
+                            player.setMediaItem(mediaItem)
+                            player.prepare()
+                            player.play()
+                            
+                            // エフェクトを適用
+                            val audioSessionId = player.audioSessionId
+                            if (audioSessionId != 0) {
+                                audioEffectManager.attachToAudioSession(audioSessionId)
+                                loadAndApplyAudioEffects()
+                            }
+                            
+                            // 通知を更新
+                            updateNotification()
+                        } ?: run {
+                            // 曲情報が取得できない場合はURIのみで再生
+                            val mediaItem = MediaItem.fromUri(uri)
+                            player.setMediaItem(mediaItem)
+                            player.prepare()
+                            player.play()
+                            
+                            // エフェクトを適用
+                            val audioSessionId = player.audioSessionId
+                            if (audioSessionId != 0) {
+                                audioEffectManager.attachToAudioSession(audioSessionId)
+                                loadAndApplyAudioEffects()
+                            }
+                            
+                            updateNotification()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("MusicPlayerService", "Error getting song info", e)
+                        // エラー時はURIのみで再生
+                        val mediaItem = MediaItem.fromUri(uri)
+                        player.setMediaItem(mediaItem)
+                        player.prepare()
+                        player.play()
+                        
+                        // エフェクトを適用
+                        val audioSessionId = player.audioSessionId
+                        if (audioSessionId != 0) {
+                            audioEffectManager.attachToAudioSession(audioSessionId)
+                            loadAndApplyAudioEffects()
+                        }
+                        
+                        updateNotification()
+                    }
+                }
+                
                 // 現在のrepeatModeを適用
                 setRepeatMode(repeatMode)
                 
-                // エフェクトを適用
-                val audioSessionId = player.audioSessionId
-                if (audioSessionId != 0) {
-                    audioEffectManager.attachToAudioSession(audioSessionId)
-                    loadAndApplyAudioEffects()
-                }
-                
+                // 初期通知を表示（曲情報は後で更新される）
                 startForeground(Constants.NOTIFICATION_ID, createNotification())
                 android.util.Log.d("MusicPlayerService", "Song playback started")
             } catch (e: Exception) {
@@ -221,7 +337,10 @@ class MusicPlayerService : Service() {
                 Constants.NOTIFICATION_CHANNEL_ID,
                 Constants.NOTIFICATION_CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_LOW
-            )
+            ).apply {
+                description = "音楽再生の通知"
+                setShowBadge(false)
+            }
             val notificationManager = getSystemService(NotificationManager::class.java)
             notificationManager.createNotificationChannel(channel)
         }
@@ -234,28 +353,110 @@ class MusicPlayerService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         
+        // アルバムアートを取得
+        val albumArtBitmap = loadAlbumArtBitmap()
+        
+        // 前の曲アクション
+        val previousAction = NotificationCompat.Action(
+            android.R.drawable.ic_media_previous,
+            "前の曲",
+            createPreviousPendingIntent()
+        )
+        
+        // 再生/一時停止アクション
         val playPauseAction = if (isPlaying()) {
             NotificationCompat.Action(
-                R.drawable.ic_menu_camera, // TODO: 適切なアイコンに変更
-                "Pause",
+                android.R.drawable.ic_media_pause,
+                "一時停止",
                 createPlayPausePendingIntent()
             )
         } else {
             NotificationCompat.Action(
-                R.drawable.ic_menu_camera, // TODO: 適切なアイコンに変更
-                "Play",
+                android.R.drawable.ic_media_play,
+                "再生",
                 createPlayPausePendingIntent()
             )
         }
         
-        return NotificationCompat.Builder(this, Constants.NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("SoundWave")
-            .setContentText("音楽を再生中")
+        // 次の曲アクション
+        val nextAction = NotificationCompat.Action(
+            android.R.drawable.ic_media_next,
+            "次の曲",
+            createNextPendingIntent()
+        )
+        
+        val mediaSession = this.mediaSession
+        val notificationBuilder = NotificationCompat.Builder(this, Constants.NOTIFICATION_CHANNEL_ID)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC) // ロック画面で表示
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(pendingIntent)
-            .addAction(playPauseAction)
-            .setStyle(MediaNotificationCompat.MediaStyle().setShowActionsInCompactView(0))
-            .build()
+            .setContentTitle(currentSongTitle ?: "SoundWave")
+            .setContentText(currentSongArtist ?: "音楽を再生中")
+            .setLargeIcon(albumArtBitmap)
+            .addAction(previousAction) // #0
+            .addAction(playPauseAction) // #1
+            .addAction(nextAction) // #2
+        
+        // MediaStyleを適用
+        if (mediaSession != null) {
+            notificationBuilder.setStyle(
+                MediaStyleNotificationHelper.MediaStyle(mediaSession)
+                    .setShowActionsInCompactView(1) // コンパクトビューに再生/一時停止ボタンを表示
+            )
+        } else {
+            // MediaSessionがない場合は従来のMediaStyleを使用
+            notificationBuilder.setStyle(
+                androidx.media.app.NotificationCompat.MediaStyle()
+                    .setShowActionsInCompactView(1)
+            )
+        }
+        
+        return notificationBuilder.build()
+    }
+    
+    private fun loadAlbumArtBitmap(): Bitmap? {
+        return try {
+            if (currentAlbumArtPath.isNullOrBlank()) {
+                null
+            } else {
+                // メインスレッドでない場合はnullを返す（非同期で読み込む）
+                if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+                    // バックグラウンドスレッドの場合は、同期的に読み込む（通知作成時のみ）
+                    try {
+                        val imageLoader = ImageLoader(applicationContext)
+                        val request = ImageRequest.Builder(applicationContext)
+                            .data(currentAlbumArtPath)
+                            .build()
+                        val result = runBlocking(Dispatchers.IO) { imageLoader.execute(request) }
+                        if (result is SuccessResult) {
+                            val drawable = result.drawable
+                            if (drawable is BitmapDrawable) {
+                                drawable.bitmap
+                            } else {
+                                // BitmapDrawableでない場合は変換
+                                val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 512
+                                val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 512
+                                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                                val canvas = Canvas(bitmap)
+                                drawable.setBounds(0, 0, width, height)
+                                drawable.draw(canvas)
+                                bitmap
+                            }
+                        } else {
+                            null
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("MusicPlayerService", "Error loading album art", e)
+                        null
+                    }
+                } else {
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MusicPlayerService", "Error loading album art", e)
+            null
+        }
     }
     
     private fun createPlayPausePendingIntent(): PendingIntent {
@@ -264,6 +465,26 @@ class MusicPlayerService : Service() {
         }
         return PendingIntent.getService(
             this, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+    
+    private fun createPreviousPendingIntent(): PendingIntent {
+        val intent = Intent(this, MusicPlayerService::class.java).apply {
+            action = Constants.ACTION_PREVIOUS
+        }
+        return PendingIntent.getService(
+            this, 1, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+    
+    private fun createNextPendingIntent(): PendingIntent {
+        val intent = Intent(this, MusicPlayerService::class.java).apply {
+            action = Constants.ACTION_NEXT
+        }
+        return PendingIntent.getService(
+            this, 2, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
@@ -281,6 +502,12 @@ class MusicPlayerService : Service() {
                 } else {
                     resume()
                 }
+            }
+            Constants.ACTION_PREVIOUS -> {
+                playPreviousSong()
+            }
+            Constants.ACTION_NEXT -> {
+                playNextSong()
             }
         }
         return START_STICKY
@@ -362,6 +589,8 @@ class MusicPlayerService : Service() {
     
     override fun onDestroy() {
         super.onDestroy()
+        mediaSession?.release()
+        mediaSession = null
         audioEffectManager.release()
         serviceScope.cancel()
         exoPlayer?.release()
@@ -406,4 +635,3 @@ class MusicPlayerService : Service() {
     }
     
 }
-
