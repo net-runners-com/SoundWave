@@ -9,6 +9,13 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.GeolocationPermissions
+import com.example.soundwave.data.AppDatabaseModule
+import com.example.soundwave.data.repository.MusicRepository
+import com.example.soundwave.player.PlayerManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -175,6 +182,8 @@ private val leafletHtml = """
     // 描画された円をチェックして、現在地が円の中にあるかどうかを判定
     let isInCircle = false;
     let circleName = null;
+    let wasInCircle = window.wasInCircle || false; // 前回の状態を保持
+    
     drawnItems.eachLayer(function(layer) {
       if (layer instanceof L.Circle) {
         if (isLocationInCircle(currentLocation, layer)) {
@@ -189,6 +198,25 @@ private val leafletHtml = """
         }
       }
     });
+    
+    // 円の中に入った瞬間（前回は外にいて、今回は中にいる）に音楽を再生
+    if (isInCircle && !wasInCircle) {
+      console.log("Entered circle! Playing latest song.");
+      if (typeof AndroidLocation !== 'undefined') {
+        AndroidLocation.playLatestSong();
+      }
+    }
+    
+    // 円から外れた瞬間（前回は中にいて、今回は外にいる）に音楽を停止
+    if (!isInCircle && wasInCircle) {
+      console.log("Exited circle! Stopping music.");
+      if (typeof AndroidLocation !== 'undefined') {
+        AndroidLocation.stopMusic();
+      }
+    }
+    
+    // 状態を更新
+    window.wasInCircle = isInCircle;
     
     // マーカーの位置を更新
     // アイコンを変更するために、マーカーを削除して再作成
@@ -456,6 +484,10 @@ fun MapTab() {
 }
 
 class LocationSaveInterface(private val context: Context) {
+    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val musicRepository = AppDatabaseModule.getMusicRepository(context)
+    private val playerManager = PlayerManager.getInstance(context)
+    
     @JavascriptInterface
     fun saveLocation(lat: Double, lng: Double) {
         val prefs = context.getSharedPreferences("map_location_prefs", Context.MODE_PRIVATE)
@@ -479,5 +511,37 @@ class LocationSaveInterface(private val context: Context) {
         val prefs = context.getSharedPreferences("map_location_prefs", Context.MODE_PRIVATE)
         val lng = prefs.getFloat("last_lng", 0f)
         return if (lng != 0f) lng.toDouble() else 0.0
+    }
+    
+    @JavascriptInterface
+    fun playLatestSong() {
+        coroutineScope.launch(Dispatchers.IO) {
+            try {
+                // 最新の曲を取得（dateAddedでソート、最新の1曲）
+                val allSongs = musicRepository.getAllSongsSync()
+                val latestSong = allSongs.maxByOrNull { it.dateAdded }
+                
+                if (latestSong != null) {
+                    android.util.Log.d("LocationSave", "Playing latest song: ${latestSong.title}")
+                    playerManager.playSong(latestSong.filePath, latestSong.id)
+                } else {
+                    android.util.Log.w("LocationSave", "No songs found")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("LocationSave", "Error playing latest song", e)
+            }
+        }
+    }
+    
+    @JavascriptInterface
+    fun stopMusic() {
+        coroutineScope.launch(Dispatchers.Main) {
+            try {
+                android.util.Log.d("LocationSave", "Stopping music")
+                playerManager.pause()
+            } catch (e: Exception) {
+                android.util.Log.e("LocationSave", "Error stopping music", e)
+            }
+        }
     }
 }
