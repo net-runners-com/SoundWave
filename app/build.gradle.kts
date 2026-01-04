@@ -114,6 +114,9 @@ dependencies {
     // Google Play Billing
     implementation("com.android.billingclient:billing-ktx:6.1.0")
     
+    // Google Play Services Location
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    
     // YouTube Download (yt-dlp wrapper)
     // Note: yausername/dvdはJitPackから取得可能
     implementation("com.github.yausername.youtubedl-android:library:0.13.0")

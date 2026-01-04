@@ -13,7 +13,8 @@ enum class TabItem(
     ARTISTS("アーティスト", Icons.Default.Person),
     FOLDERS("フォルダ", Icons.Default.Folder),
     PLAYLISTS("プレイリスト", Icons.Default.PlaylistPlay),
-    YOUTUBE("YouTube", Icons.Default.VideoLibrary)
+    YOUTUBE("YouTube", Icons.Default.VideoLibrary),
+    MAP("マップ", Icons.Default.Map)
 }
 
 

@@ -64,8 +64,12 @@ fun HomeScreen(
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
     var clearSelectionTrigger by remember { mutableStateOf(false) }
     
+    // Mapタブの時はスワイプを無効化
+    val isMapTab = TabItem.values().getOrNull(selectedTabIndex) == TabItem.MAP
+    
     ModalNavigationDrawer(
         drawerState = drawerState,
+        gesturesEnabled = !isMapTab, // Mapタブの時はスワイプを無効化
         drawerContent = {
             ModalDrawerSheet(
                 modifier = Modifier.width(240.dp)
@@ -312,6 +316,7 @@ fun HomeScreen(
                         onPlaylistSelected = onPlaylistSelected
                     )
                     TabItem.YOUTUBE -> YouTubeTab()
+                    TabItem.MAP -> MapTab()
                     null -> {}
                 }
             }
