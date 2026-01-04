@@ -21,12 +21,14 @@ import com.example.soundwave.ui.home.HomeViewModel
 import com.example.soundwave.ui.home.HomeViewModelFactory
 import com.example.soundwave.ui.theme.AppTheme
 import com.example.soundwave.ui.theme.ThemeManager
+import com.example.soundwave.ui.settings.WidgetSettingsScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
     onThemeChanged: (AppTheme) -> Unit = {},
+    onWidgetSettingsClick: () -> Unit = {},
     viewModel: HomeViewModel = viewModel(
         factory = HomeViewModelFactory(LocalContext.current.applicationContext as android.app.Application)
     )
@@ -192,6 +194,35 @@ fun SettingsScreen(
                             icon = Icons.Default.Apps,
                             title = "アプリ名",
                             subtitle = "SoundWave"
+                        )
+                    }
+                }
+            }
+            
+            // ウィジェット設定
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "ウィジェット",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+            
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        SettingsItem(
+                            icon = Icons.Default.Widgets,
+                            title = "ウィジェット設定",
+                            subtitle = "ウィジェットの外観と動作をカスタマイズ",
+                            onClick = onWidgetSettingsClick
                         )
                     }
                 }

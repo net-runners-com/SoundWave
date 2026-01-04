@@ -16,6 +16,7 @@ import com.example.soundwave.ui.playlist.PlaylistDetailScreen
 import com.example.soundwave.ui.home.HomeScreen
 import com.example.soundwave.ui.player.PlayerScreen
 import com.example.soundwave.ui.settings.SettingsScreen
+import com.example.soundwave.ui.settings.WidgetSettingsScreen
 import com.example.soundwave.ui.theme.AppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -36,6 +37,7 @@ fun SoundWaveNavigation(
     var currentFolderPath by remember { mutableStateOf<String?>(null) }
     var currentPlaylistId by remember { mutableStateOf<Long?>(null) }
     var showSettings by remember { mutableStateOf(false) }
+    var showWidgetSettings by remember { mutableStateOf(false) }
     
     // 曲をクリックしたときの処理（再生のみ、画面遷移しない）
     val onSongClick: (Long) -> Unit = { songId ->
@@ -54,10 +56,16 @@ fun SoundWaveNavigation(
             onPermissionsGranted = { hasPermissions = true }
         )
     } else when {
+        showWidgetSettings -> {
+            WidgetSettingsScreen(
+                onBack = { showWidgetSettings = false }
+            )
+        }
         showSettings -> {
             SettingsScreen(
                 onBack = { showSettings = false },
-                onThemeChanged = onThemeChanged
+                onThemeChanged = onThemeChanged,
+                onWidgetSettingsClick = { showWidgetSettings = true }
             )
         }
         currentSongId != null -> {

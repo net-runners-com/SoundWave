@@ -46,6 +46,21 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+        
+        <!-- 音楽プレーヤーウィジェット -->
+        <receiver
+            android:name=".widget.MusicPlayerWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.soundwave.PLAY_PAUSE" />
+                <action android:name="com.example.soundwave.PREVIOUS" />
+                <action android:name="com.example.soundwave.NEXT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/music_player_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

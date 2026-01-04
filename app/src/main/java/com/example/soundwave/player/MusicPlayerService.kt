@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.os.Binder
 import android.os.Build
@@ -83,6 +84,7 @@ class MusicPlayerService : Service() {
                             when (playbackState) {
                                 Player.STATE_READY -> {
                                     updateNotification()
+                                    updateWidget()
                                 }
                                 Player.STATE_ENDED -> {
                                     handlePlaybackEnded()
@@ -176,8 +178,9 @@ class MusicPlayerService : Service() {
                                 loadAndApplyAudioEffects()
                             }
                             
-                            // 通知を更新
+                            // 通知とウィジェットを更新
                             updateNotification()
+                            updateWidget()
                         } ?: run {
                             // 曲情報が取得できない場合はURIのみで再生
                             val mediaItem = MediaItem.fromUri(uri)
@@ -192,7 +195,9 @@ class MusicPlayerService : Service() {
                                 loadAndApplyAudioEffects()
                             }
                             
+                            // 通知とウィジェットを更新
                             updateNotification()
+                            updateWidget()
                         }
                     } catch (e: Exception) {
                         android.util.Log.e("MusicPlayerService", "Error getting song info", e)
@@ -209,7 +214,9 @@ class MusicPlayerService : Service() {
                             loadAndApplyAudioEffects()
                         }
                         
+                        // 通知とウィジェットを更新
                         updateNotification()
+                        updateWidget()
                     }
                 }
                 
@@ -230,11 +237,13 @@ class MusicPlayerService : Service() {
     fun pause() {
         exoPlayer?.pause()
         updateNotification()
+        updateWidget()
     }
     
     fun resume() {
         exoPlayer?.play()
         updateNotification()
+        updateWidget()
     }
     
     fun stop() {
@@ -492,6 +501,27 @@ class MusicPlayerService : Service() {
     private fun updateNotification() {
         val notificationManager = getSystemService(NotificationManager::class.java)
         notificationManager.notify(Constants.NOTIFICATION_ID, createNotification())
+    }
+    
+    private fun updateWidget() {
+        // SharedPreferencesに現在の曲情報を保存
+        val prefs = getSharedPreferences(Constants.PREFS_WIDGET, Context.MODE_PRIVATE)
+        prefs.edit().apply {
+            putString(Constants.KEY_WIDGET_SONG_TITLE, currentSongTitle)
+            putString(Constants.KEY_WIDGET_SONG_ARTIST, currentSongArtist)
+            putString(Constants.KEY_WIDGET_ALBUM_ART_PATH, currentAlbumArtPath)
+            putBoolean(Constants.KEY_WIDGET_IS_PLAYING, isPlaying())
+            apply()
+        }
+        
+        // ウィジェットを更新
+        com.example.soundwave.widget.MusicPlayerWidget.updateAllWidgets(
+            applicationContext,
+            currentSongTitle,
+            currentSongArtist,
+            currentAlbumArtPath,
+            isPlaying()
+        )
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
