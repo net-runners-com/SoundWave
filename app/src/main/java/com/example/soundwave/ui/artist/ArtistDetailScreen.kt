@@ -1,28 +1,46 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 
 package com.example.soundwave.ui.artist
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
+import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
 import com.example.soundwave.data.AppDatabaseModule
 import com.example.soundwave.ui.components.ListItemCard
 import com.example.soundwave.ui.components.EmptyState
 import com.example.soundwave.ui.components.TabItem
 import com.example.soundwave.ui.components.NowPlayingFAB
+import com.example.soundwave.ui.components.CreatePlaylistDialog
+import com.example.soundwave.ui.home.tabs.PlaylistOptionsMenu
+import com.example.soundwave.ui.home.tabs.SelectPlaylistDialog
 import com.example.soundwave.ui.player.PlayerScreen
 import com.example.soundwave.player.PlayerManager
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 
 @Composable
 fun ArtistDetailScreen(
@@ -36,6 +54,7 @@ fun ArtistDetailScreen(
 ) {
     val context = LocalContext.current
     val musicRepository = remember { AppDatabaseModule.getMusicRepository(context) }
+    val playlistRepository = remember { AppDatabaseModule.getPlaylistRepository(context) }
     val playerManager = remember { PlayerManager.getInstance(context) }
     val scope = rememberCoroutineScope()
     
@@ -48,6 +67,20 @@ fun ArtistDetailScreen(
     
     var selectedBottomTabIndex by remember { mutableStateOf(TabItem.ARTISTS.ordinal) }
     
+    // 選択モードの状態
+    var isSelectionMode by remember { mutableStateOf(false) }
+    var selectedSongs by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var showPlaylistOptions by remember { mutableStateOf(false) }
+    var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+    var showAddToPlaylistDialog by remember { mutableStateOf(false) }
+    
+    // 選択中の曲がなくなったら自動で選択モードを解除
+    LaunchedEffect(selectedSongs) {
+        if (selectedSongs.isEmpty() && isSelectionMode) {
+            isSelectionMode = false
+        }
+    }
+    
     // ボトムシートの状態
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showBottomSheet by remember { mutableStateOf(false) }
@@ -55,10 +88,25 @@ fun ArtistDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(artistName) },
+                title = { 
+                    if (isSelectionMode) {
+                        Text("選択中")
+                    } else {
+                        Text(artistName)
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "戻る")
+                    if (isSelectionMode) {
+                        IconButton(onClick = {
+                            isSelectionMode = false
+                            selectedSongs = emptySet()
+                        }) {
+                            Icon(Icons.Default.Clear, contentDescription = "キャンセル")
+                        }
+                    } else {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "戻る")
+                        }
                     }
                 }
             )
@@ -143,20 +191,141 @@ fun ArtistDetailScreen(
                 EmptyState(message = "このアーティストの曲がありません")
             }
         } else {
-            LazyColumn(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                    .padding(paddingValues)
             ) {
-                items(songs.sortedBy { it.album }, key = { it.id }) { song ->
-                    ListItemCard(
-                        title = song.title,
-                        subtitle = "${song.album}",
-                        imageUrl = song.albumArtPath,
-                        onClick = { onSongSelected(song.id) }
-                    )
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(songs.sortedBy { it.album }, key = { it.id }) { song ->
+                        val isSelected = selectedSongs.contains(song.id)
+                        
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .combinedClickable(
+                                    onClick = {
+                                        if (isSelectionMode) {
+                                            selectedSongs = if (isSelected) {
+                                                selectedSongs - song.id
+                                            } else {
+                                                selectedSongs + song.id
+                                            }
+                                        } else {
+                                            onSongSelected(song.id)
+                                        }
+                                    },
+                                    onLongClick = {
+                                        if (!isSelectionMode) {
+                                            isSelectionMode = true
+                                            selectedSongs = setOf(song.id)
+                                        }
+                                    }
+                                ),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected && isSelectionMode) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surface
+                                }
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // アルバムアートまたはデフォルトアイコン
+                                Box(
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .padding(end = 12.dp)
+                                        .clip(MaterialTheme.shapes.medium)
+                                ) {
+                                    if (song.albumArtPath != null && song.albumArtPath.isNotBlank()) {
+                                        val imagePainter = rememberAsyncImagePainter(
+                                            model = ImageRequest.Builder(LocalContext.current)
+                                                .data(song.albumArtPath)
+                                                .crossfade(true)
+                                                .build()
+                                        )
+                                        
+                                        when (imagePainter.state) {
+                                            is AsyncImagePainter.State.Loading,
+                                            is AsyncImagePainter.State.Error -> {
+                                                Box(
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.MusicNote,
+                                                        contentDescription = song.title,
+                                                        modifier = Modifier.size(32.dp),
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
+                                            else -> {
+                                                AsyncImage(
+                                                    model = imagePainter.request,
+                                                    contentDescription = song.title,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.MusicNote,
+                                                contentDescription = song.title,
+                                                modifier = Modifier.size(32.dp),
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                }
+                                
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = song.title,
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Text(
+                                        text = song.album,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // 選択モード時のオプションボタン
+                if (isSelectionMode && selectedSongs.isNotEmpty()) {
+                    FloatingActionButton(
+                        onClick = { showPlaylistOptions = true },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp),
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "オプション"
+                        )
+                    }
                 }
             }
         }
@@ -182,6 +351,63 @@ fun ArtistDetailScreen(
                 }
             )
         }
+    }
+    
+    // プレイリストオプションメニュー
+    if (showPlaylistOptions) {
+        PlaylistOptionsMenu(
+            selectedSongs = selectedSongs,
+            onDismiss = { showPlaylistOptions = false },
+            onCreatePlaylist = {
+                showPlaylistOptions = false
+                showCreatePlaylistDialog = true
+            },
+            onAddToPlaylist = {
+                showPlaylistOptions = false
+                showAddToPlaylistDialog = true
+            }
+        )
+    }
+    
+    // プレイリスト作成ダイアログ
+    if (showCreatePlaylistDialog) {
+        CreatePlaylistDialog(
+            onDismiss = { showCreatePlaylistDialog = false },
+            onConfirm = { playlistName ->
+                scope.launch {
+                    withContext(Dispatchers.IO) {
+                        val playlistId = playlistRepository.createPlaylist(playlistName)
+                        selectedSongs.forEachIndexed { index, songId ->
+                            playlistRepository.addSongToPlaylist(playlistId, songId, index)
+                        }
+                    }
+                    showCreatePlaylistDialog = false
+                    isSelectionMode = false
+                    selectedSongs = emptySet()
+                }
+            }
+        )
+    }
+    
+    // プレイリスト選択ダイアログ
+    if (showAddToPlaylistDialog) {
+        SelectPlaylistDialog(
+            selectedSongs = selectedSongs,
+            onDismiss = { showAddToPlaylistDialog = false },
+            onPlaylistSelected = { playlistId ->
+                scope.launch {
+                    withContext(Dispatchers.IO) {
+                        val currentSongs = playlistRepository.getSongsInPlaylist(playlistId).first()
+                        selectedSongs.forEachIndexed { index, songId ->
+                            playlistRepository.addSongToPlaylist(playlistId, songId, currentSongs.size + index)
+                        }
+                    }
+                    showAddToPlaylistDialog = false
+                    isSelectionMode = false
+                    selectedSongs = emptySet()
+                }
+            }
+        )
     }
 }
 

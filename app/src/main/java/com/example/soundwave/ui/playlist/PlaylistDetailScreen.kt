@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 
-package com.example.soundwave.ui.folder
+package com.example.soundwave.ui.playlist
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -12,9 +12,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,7 +29,6 @@ import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.example.soundwave.data.AppDatabaseModule
-import com.example.soundwave.ui.components.ListItemCard
 import com.example.soundwave.ui.components.EmptyState
 import com.example.soundwave.ui.components.TabItem
 import com.example.soundwave.ui.components.NowPlayingFAB
@@ -43,8 +43,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 
 @Composable
-fun FolderDetailScreen(
-    folderPath: String,
+fun PlaylistDetailScreen(
+    playlistId: Long,
     onBack: () -> Unit,
     onSongSelected: (Long) -> Unit = {},
     onAlbumSelected: (String) -> Unit = {},
@@ -53,7 +53,6 @@ fun FolderDetailScreen(
     onPlaylistSelected: (Long) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val musicRepository = remember { AppDatabaseModule.getMusicRepository(context) }
     val playlistRepository = remember { AppDatabaseModule.getPlaylistRepository(context) }
     val playerManager = remember { PlayerManager.getInstance(context) }
     val scope = rememberCoroutineScope()
@@ -62,10 +61,20 @@ fun FolderDetailScreen(
     val currentSongId by playerManager.currentSongId.collectAsState()
     val isPlaying by playerManager.isPlaying.collectAsState()
     
-    // フォルダ内の曲を取得
-    val songs by musicRepository.getSongsByFolder(folderPath).collectAsState(initial = emptyList())
+    // プレイリスト情報を取得
+    var playlistName by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(playlistId) {
+        withContext(Dispatchers.IO) {
+            playlistRepository.getPlaylistById(playlistId)?.let {
+                playlistName = it.name
+            }
+        }
+    }
     
-    var selectedBottomTabIndex by remember { mutableStateOf(TabItem.FOLDERS.ordinal) }
+    // プレイリスト内の曲を取得
+    val songs by playlistRepository.getSongsInPlaylist(playlistId).collectAsState(initial = emptyList())
+    
+    var selectedBottomTabIndex by remember { mutableStateOf(TabItem.PLAYLISTS.ordinal) }
     
     // 選択モードの状態
     var isSelectionMode by remember { mutableStateOf(false) }
@@ -85,11 +94,6 @@ fun FolderDetailScreen(
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showBottomSheet by remember { mutableStateOf(false) }
     
-    // フォルダ名を取得（パスから最後のディレクトリ名を抽出）
-    val folderName = remember(folderPath) {
-        folderPath.split("/").lastOrNull() ?: folderPath
-    }
-    
     Scaffold(
         topBar = {
             TopAppBar(
@@ -97,7 +101,7 @@ fun FolderDetailScreen(
                     if (isSelectionMode) {
                         Text("選択中")
                     } else {
-                        Text(folderName)
+                        Text(playlistName ?: "プレイリスト")
                     }
                 },
                 navigationIcon = {
@@ -113,12 +117,51 @@ fun FolderDetailScreen(
                             Icon(Icons.Default.ArrowBack, contentDescription = "戻る")
                         }
                     }
+                },
+                actions = {
+                    if (isSelectionMode) {
+                        var showMenu by remember { mutableStateOf(false) }
+                        
+                        Box {
+                            IconButton(onClick = { showMenu = true }) {
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    contentDescription = "メニュー"
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showMenu,
+                                onDismissRequest = { showMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("新しいプレイリストを作成") },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Add, contentDescription = null)
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        showCreatePlaylistDialog = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("既存のプレイリストに追加") },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.PlaylistPlay, contentDescription = null)
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        showAddToPlaylistDialog = true
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             )
         },
         bottomBar = {
             Column {
-                // 再生中のミニプレーヤー
+                // 現在再生中の曲を表示（再生中の場合のみ）
                 NowPlayingFAB(
                     currentSongId = currentSongId,
                     isPlaying = isPlaying,
@@ -137,27 +180,21 @@ fun FolderDetailScreen(
                     }
                 )
                 
-                // ボトムタブ
+                // タブバー
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 20.dp),
                     color = MaterialTheme.colorScheme.surface
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 20.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         TabItem.values().forEachIndexed { index, tabItem ->
                             val isSelected = selectedBottomTabIndex == index
                             IconButton(
-                                onClick = { 
-                                    selectedBottomTabIndex = index
-                                    // タブがクリックされたらHomeScreenに戻る
-                                    if (index != TabItem.FOLDERS.ordinal) {
-                                        onBack()
-                                    }
-                                },
+                                onClick = { selectedBottomTabIndex = index },
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(64.dp)
@@ -186,27 +223,20 @@ fun FolderDetailScreen(
             }
         }
     ) { paddingValues ->
-        if (songs.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                EmptyState(message = "このフォルダに曲がありません")
-            }
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            if (songs.isEmpty()) {
+                EmptyState(message = "このプレイリストには曲がありません")
+            } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(songs.sortedBy { it.title }, key = { it.id }) { song ->
+                    items(songs, key = { it.id }) { song ->
                         val isSelected = selectedSongs.contains(song.id)
                         
                         Card(
@@ -232,7 +262,7 @@ fun FolderDetailScreen(
                                     }
                                 ),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected && isSelectionMode) {
+                                containerColor = if (isSelected) {
                                     MaterialTheme.colorScheme.primaryContainer
                                 } else {
                                     MaterialTheme.colorScheme.surface
@@ -242,7 +272,7 @@ fun FolderDetailScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(16.dp),
+                                    .padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 // アルバムアートまたはデフォルトアイコン
@@ -254,7 +284,7 @@ fun FolderDetailScreen(
                                 ) {
                                     if (song.albumArtPath != null && song.albumArtPath.isNotBlank()) {
                                         val imagePainter = rememberAsyncImagePainter(
-                                            model = ImageRequest.Builder(LocalContext.current)
+                                            model = ImageRequest.Builder(context)
                                                 .data(song.albumArtPath)
                                                 .crossfade(true)
                                                 .build()
@@ -316,21 +346,21 @@ fun FolderDetailScreen(
                         }
                     }
                 }
-                
-                // 選択モード時のオプションボタン
-                if (isSelectionMode && selectedSongs.isNotEmpty()) {
-                    FloatingActionButton(
-                        onClick = { showPlaylistOptions = true },
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(16.dp),
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "オプション"
-                        )
-                    }
+            }
+            
+            // 選択モード時のオプションボタン
+            if (isSelectionMode && selectedSongs.isNotEmpty()) {
+                FloatingActionButton(
+                    onClick = { showPlaylistOptions = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp),
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "オプション"
+                    )
                 }
             }
         }
@@ -381,9 +411,9 @@ fun FolderDetailScreen(
             onConfirm = { playlistName ->
                 scope.launch {
                     withContext(Dispatchers.IO) {
-                        val playlistId = playlistRepository.createPlaylist(playlistName)
+                        val newPlaylistId = playlistRepository.createPlaylist(playlistName)
                         selectedSongs.forEachIndexed { index, songId ->
-                            playlistRepository.addSongToPlaylist(playlistId, songId, index)
+                            playlistRepository.addSongToPlaylist(newPlaylistId, songId, index)
                         }
                     }
                     showCreatePlaylistDialog = false
@@ -399,12 +429,12 @@ fun FolderDetailScreen(
         SelectPlaylistDialog(
             selectedSongs = selectedSongs,
             onDismiss = { showAddToPlaylistDialog = false },
-            onPlaylistSelected = { playlistId ->
+            onPlaylistSelected = { targetPlaylistId ->
                 scope.launch {
                     withContext(Dispatchers.IO) {
-                        val currentSongs = playlistRepository.getSongsInPlaylist(playlistId).first()
+                        val currentSongs = playlistRepository.getSongsInPlaylist(targetPlaylistId).first()
                         selectedSongs.forEachIndexed { index, songId ->
-                            playlistRepository.addSongToPlaylist(playlistId, songId, currentSongs.size + index)
+                            playlistRepository.addSongToPlaylist(targetPlaylistId, songId, currentSongs.size + index)
                         }
                     }
                     showAddToPlaylistDialog = false

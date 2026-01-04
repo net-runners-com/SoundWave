@@ -12,6 +12,7 @@ import com.example.soundwave.ui.permission.PermissionScreen
 import com.example.soundwave.ui.album.AlbumDetailScreen
 import com.example.soundwave.ui.artist.ArtistDetailScreen
 import com.example.soundwave.ui.folder.FolderDetailScreen
+import com.example.soundwave.ui.playlist.PlaylistDetailScreen
 import com.example.soundwave.ui.home.HomeScreen
 import com.example.soundwave.ui.player.PlayerScreen
 import com.example.soundwave.ui.settings.SettingsScreen
@@ -99,14 +100,14 @@ fun SoundWaveNavigation(
             )
         }
         currentPlaylistId != null -> {
-            // TODO: プレイリスト詳細画面
-            HomeScreen(
+            PlaylistDetailScreen(
+                playlistId = currentPlaylistId!!,
+                onBack = { currentPlaylistId = null },
                 onSongSelected = onSongClick,
                 onAlbumSelected = { album -> currentAlbum = album },
                 onArtistSelected = { artist -> currentArtist = artist },
                 onFolderSelected = { folderPath -> currentFolderPath = folderPath },
-                onPlaylistSelected = { playlistId -> currentPlaylistId = playlistId },
-                onSettingsClick = { showSettings = true }
+                onPlaylistSelected = { playlistId -> currentPlaylistId = playlistId }
             )
         }
         else -> {

@@ -107,7 +107,7 @@ fun PlaylistsTab(
                         start = 8.dp,
                         end = 8.dp,
                         top = 4.dp,
-                        bottom = 80.dp // FABのスペースを確保
+                        bottom = 4.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -129,21 +129,6 @@ fun PlaylistsTab(
                     }
                 }
             }
-        }
-        
-        // FAB（右下に配置、再生中のボトムシートと干渉しないように下から十分なスペースを確保）
-        FloatingActionButton(
-            onClick = { showCreateDialog = true },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(start = 16.dp, end = 32.dp, bottom = 50.dp), // タブバーと再生中のミニプレーヤーの上に配置、右側にもパディング
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "プレイリストを作成"
-            )
         }
     }
 }
