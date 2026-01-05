@@ -36,6 +36,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 
 class MusicPlayerService : Service() {
     private var exoPlayer: ExoPlayer? = null
@@ -48,6 +50,13 @@ class MusicPlayerService : Service() {
     private var currentSongArtist: String? = null
     private var currentAlbumArtPath: String? = null
     
+    // コンテキストモード用の変数（アルバム、アーティスト、フォルダ、プレイリスト）
+    private var currentPlaylistId: Long? = null
+    private var currentAlbumName: String? = null
+    private var currentArtistName: String? = null
+    private var currentFolderPath: String? = null
+    private var contextSongs: List<com.example.soundwave.data.database.SongEntity> = emptyList()
+    
     private val audioEffectManager by lazy {
         AudioEffectManager(applicationContext)
     }
@@ -55,6 +64,9 @@ class MusicPlayerService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val musicRepository by lazy {
         AppDatabaseModule.getMusicRepository(applicationContext)
+    }
+    private val playlistRepository by lazy {
+        AppDatabaseModule.getPlaylistRepository(applicationContext)
     }
     
     inner class MusicBinder : Binder() {
@@ -558,27 +570,40 @@ class MusicPlayerService : Service() {
     private suspend fun playNextSongInternal() {
         val currentId = currentSongId ?: return
         try {
-            // すべての曲を取得
-            val allSongs = musicRepository.getAllSongsSync()
-            if (allSongs.isEmpty()) {
+            val songs: List<com.example.soundwave.data.database.SongEntity>
+            
+            // コンテキストモード（アルバム、アーティスト、フォルダ、プレイリスト）の場合はそのコンテキスト内の曲を使用
+            if (contextSongs.isNotEmpty()) {
+                songs = contextSongs
+                android.util.Log.d("MusicPlayerService", "Playing next song from context (playlist: $currentPlaylistId, album: $currentAlbumName, artist: $currentArtistName, folder: $currentFolderPath)")
+            } else {
+                // 通常モード: すべての曲を取得
+                songs = withContext(Dispatchers.IO) {
+                    musicRepository.getAllSongsSync()
+                }
+            }
+            
+            if (songs.isEmpty()) {
                 android.util.Log.w("MusicPlayerService", "No songs available for next song")
                 return
             }
             
             // 現在の曲のインデックスを探す
-            val currentIndex = allSongs.indexOfFirst { song -> song.id == currentId }
+            val currentIndex = songs.indexOfFirst { song -> song.id == currentId }
             if (currentIndex == -1) {
                 android.util.Log.w("MusicPlayerService", "Current song not found in list")
                 return
             }
             
             // 次の曲のインデックスを計算（最後の曲の場合は最初に戻る）
-            val nextIndex = (currentIndex + 1) % allSongs.size
-            val nextSong = allSongs[nextIndex]
+            val nextIndex = (currentIndex + 1) % songs.size
+            val nextSong = songs[nextIndex]
             
             android.util.Log.d("MusicPlayerService", "Playing next song: ${nextSong.title} (index: $nextIndex)")
-            // 次の曲を再生
-            playSong(nextSong.filePath, nextSong.id)
+            // 次の曲を再生（メインスレッドで実行）
+            withContext(Dispatchers.Main) {
+                playSong(nextSong.filePath, nextSong.id)
+            }
         } catch (e: Exception) {
             android.util.Log.e("MusicPlayerService", "Error playing next song", e)
         }
@@ -587,15 +612,26 @@ class MusicPlayerService : Service() {
     private suspend fun playPreviousSongInternal() {
         val currentId = currentSongId ?: return
         try {
-            // すべての曲を取得
-            val allSongs = musicRepository.getAllSongsSync()
-            if (allSongs.isEmpty()) {
+            val songs: List<com.example.soundwave.data.database.SongEntity>
+            
+            // コンテキストモード（アルバム、アーティスト、フォルダ、プレイリスト）の場合はそのコンテキスト内の曲を使用
+            if (contextSongs.isNotEmpty()) {
+                songs = contextSongs
+                android.util.Log.d("MusicPlayerService", "Playing previous song from context (playlist: $currentPlaylistId, album: $currentAlbumName, artist: $currentArtistName, folder: $currentFolderPath)")
+            } else {
+                // 通常モード: すべての曲を取得
+                songs = withContext(Dispatchers.IO) {
+                    musicRepository.getAllSongsSync()
+                }
+            }
+            
+            if (songs.isEmpty()) {
                 android.util.Log.w("MusicPlayerService", "No songs available for previous song")
                 return
             }
             
             // 現在の曲のインデックスを探す
-            val currentIndex = allSongs.indexOfFirst { song -> song.id == currentId }
+            val currentIndex = songs.indexOfFirst { song -> song.id == currentId }
             if (currentIndex == -1) {
                 android.util.Log.w("MusicPlayerService", "Current song not found in list")
                 return
@@ -603,18 +639,115 @@ class MusicPlayerService : Service() {
             
             // 前の曲のインデックスを計算（最初の曲の場合は最後に戻る）
             val previousIndex = if (currentIndex == 0) {
-                allSongs.size - 1
+                songs.size - 1
             } else {
                 currentIndex - 1
             }
-            val previousSong = allSongs[previousIndex]
+            val previousSong = songs[previousIndex]
             
             android.util.Log.d("MusicPlayerService", "Playing previous song: ${previousSong.title} (index: $previousIndex)")
-            // 前の曲を再生
-            playSong(previousSong.filePath, previousSong.id)
+            // 前の曲を再生（メインスレッドで実行）
+            withContext(Dispatchers.Main) {
+                playSong(previousSong.filePath, previousSong.id)
+            }
         } catch (e: Exception) {
             android.util.Log.e("MusicPlayerService", "Error playing previous song", e)
         }
+    }
+    
+    // プレイリストを再生するメソッド（外部から呼び出し可能）
+    fun playPlaylist(playlistId: Long) {
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                // プレイリスト内の曲を取得
+                val songs = playlistRepository.getSongsInPlaylist(playlistId).first()
+                
+                if (songs.isNotEmpty()) {
+                    // コンテキストモードを設定
+                    currentPlaylistId = playlistId
+                    currentAlbumName = null
+                    currentArtistName = null
+                    currentFolderPath = null
+                    contextSongs = songs
+                    
+                    // 最初の曲を再生（メインスレッドで実行）
+                    val firstSong = songs[0]
+                    android.util.Log.d("MusicPlayerService", "Playing playlist: $playlistId, first song: ${firstSong.title}")
+                    withContext(Dispatchers.Main) {
+                        // playSongを呼び出す前にcurrentSongIdを設定
+                        currentSongId = firstSong.id
+                        // PlayerManagerの状態も即座に更新してUIに反映
+                        try {
+                            val playerManager = PlayerManager.getInstance(applicationContext)
+                            playerManager.setCurrentSongId(firstSong.id)
+                            playerManager.setPlaying(true)
+                        } catch (e: Exception) {
+                            android.util.Log.w("MusicPlayerService", "Could not update PlayerManager state", e)
+                        }
+                        playSong(firstSong.filePath, firstSong.id)
+                    }
+                } else {
+                    android.util.Log.w("MusicPlayerService", "Playlist is empty: $playlistId")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MusicPlayerService", "Error playing playlist", e)
+            }
+        }
+    }
+    
+    // コンテキストモードを解除するメソッド
+    fun clearContextMode() {
+        currentPlaylistId = null
+        currentAlbumName = null
+        currentArtistName = null
+        currentFolderPath = null
+        contextSongs = emptyList()
+        android.util.Log.d("MusicPlayerService", "Context mode cleared")
+    }
+    
+    // アルバムコンテキストを設定するメソッド
+    fun setAlbumContext(albumName: String, songs: List<com.example.soundwave.data.database.SongEntity>) {
+        currentPlaylistId = null
+        currentAlbumName = albumName
+        currentArtistName = null
+        currentFolderPath = null
+        contextSongs = songs
+        android.util.Log.d("MusicPlayerService", "Album context set: $albumName (${songs.size} songs)")
+    }
+    
+    // アーティストコンテキストを設定するメソッド
+    fun setArtistContext(artistName: String, songs: List<com.example.soundwave.data.database.SongEntity>) {
+        currentPlaylistId = null
+        currentAlbumName = null
+        currentArtistName = artistName
+        currentFolderPath = null
+        contextSongs = songs
+        android.util.Log.d("MusicPlayerService", "Artist context set: $artistName (${songs.size} songs)")
+    }
+    
+    // フォルダコンテキストを設定するメソッド
+    fun setFolderContext(folderPath: String, songs: List<com.example.soundwave.data.database.SongEntity>) {
+        currentPlaylistId = null
+        currentAlbumName = null
+        currentArtistName = null
+        currentFolderPath = folderPath
+        contextSongs = songs
+        android.util.Log.d("MusicPlayerService", "Folder context set: $folderPath (${songs.size} songs)")
+    }
+    
+    // プレイリストコンテキストを設定するメソッド
+    fun setPlaylistContext(playlistId: Long, songs: List<com.example.soundwave.data.database.SongEntity>) {
+        currentPlaylistId = playlistId
+        currentAlbumName = null
+        currentArtistName = null
+        currentFolderPath = null
+        contextSongs = songs
+        android.util.Log.d("MusicPlayerService", "Playlist context set: $playlistId (${songs.size} songs)")
+    }
+    
+    // プレイリストモードを解除するメソッド（後方互換性のため残す）
+    fun clearPlaylistMode() {
+        clearContextMode()
     }
     
     override fun onDestroy() {

@@ -78,6 +78,56 @@ class PlayerManager private constructor(
         _isPlaying.value = true
     }
     
+    // アルバムコンテキストで曲を再生
+    fun playSongFromAlbum(albumName: String, songs: List<com.example.soundwave.data.database.SongEntity>, filePath: String, songId: Long) {
+        service?.setAlbumContext(albumName, songs)
+        playSong(filePath, songId)
+    }
+    
+    // アーティストコンテキストで曲を再生
+    fun playSongFromArtist(artistName: String, songs: List<com.example.soundwave.data.database.SongEntity>, filePath: String, songId: Long) {
+        service?.setArtistContext(artistName, songs)
+        playSong(filePath, songId)
+    }
+    
+    // フォルダコンテキストで曲を再生
+    fun playSongFromFolder(folderPath: String, songs: List<com.example.soundwave.data.database.SongEntity>, filePath: String, songId: Long) {
+        service?.setFolderContext(folderPath, songs)
+        playSong(filePath, songId)
+    }
+    
+    // プレイリストコンテキストで曲を再生
+    fun playSongFromPlaylist(playlistId: Long, songs: List<com.example.soundwave.data.database.SongEntity>, filePath: String, songId: Long) {
+        service?.setPlaylistContext(playlistId, songs)
+        playSong(filePath, songId)
+    }
+    
+    fun playPlaylist(playlistId: Long) {
+        service?.playPlaylist(playlistId)
+        // playSongが非同期で実行されるため、少し遅延してから状態を更新
+        // 実際の状態更新はupdatePosition()で行われるが、
+        // 即座にUIを更新するために_isPlayingをtrueに設定
+        _isPlaying.value = true
+    }
+    
+    // 現在の曲IDを直接設定するメソッド（内部使用）
+    internal fun setCurrentSongId(songId: Long?) {
+        _currentSongId.value = songId
+    }
+    
+    // 再生状態を直接設定するメソッド（内部使用）
+    internal fun setPlaying(playing: Boolean) {
+        _isPlaying.value = playing
+    }
+    
+    fun clearPlaylistMode() {
+        service?.clearPlaylistMode()
+    }
+    
+    fun clearContextMode() {
+        service?.clearContextMode()
+    }
+    
     fun pause() {
         service?.pause()
         _isPlaying.value = false

@@ -64,6 +64,12 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/music_player_widget_info" />
         </receiver>
+        
+        <!-- UCrop Activity -->
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
     </application>
 
 </manifest>

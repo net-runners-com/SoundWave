@@ -17,10 +17,12 @@ import com.example.soundwave.ui.home.HomeScreen
 import com.example.soundwave.ui.player.PlayerScreen
 import com.example.soundwave.ui.settings.SettingsScreen
 import com.example.soundwave.ui.settings.WidgetSettingsScreen
+import com.example.soundwave.ui.song.SongDetailScreen
 import com.example.soundwave.ui.theme.AppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 
 @Composable
 fun SoundWaveNavigation(
@@ -29,9 +31,11 @@ fun SoundWaveNavigation(
     val context = LocalContext.current
     val playerManager = remember { PlayerManager.getInstance(context) }
     val musicRepository = remember { AppDatabaseModule.getMusicRepository(context) }
+    val playlistRepository = remember { AppDatabaseModule.getPlaylistRepository(context) }
     
     var hasPermissions by remember { mutableStateOf(false) }
     var currentSongId by remember { mutableStateOf<Long?>(null) }
+    var currentSongDetailId by remember { mutableStateOf<Long?>(null) }
     var currentAlbum by remember { mutableStateOf<String?>(null) }
     var currentArtist by remember { mutableStateOf<String?>(null) }
     var currentFolderPath by remember { mutableStateOf<String?>(null) }
@@ -45,7 +49,30 @@ fun SoundWaveNavigation(
             val song = musicRepository.getSongById(songId)
             song?.let {
                 withContext(Dispatchers.Main) {
-                    playerManager.playSong(it.filePath, it.id)
+                    // 現在のコンテキストに応じて適切なメソッドを呼び出す
+                    when {
+                        currentPlaylistId != null -> {
+                            val songs = playlistRepository.getSongsInPlaylist(currentPlaylistId!!).first()
+                            playerManager.playSongFromPlaylist(currentPlaylistId!!, songs, it.filePath, it.id)
+                        }
+                        currentAlbum != null -> {
+                            val songs = musicRepository.getSongsByAlbum(currentAlbum!!).first()
+                            playerManager.playSongFromAlbum(currentAlbum!!, songs, it.filePath, it.id)
+                        }
+                        currentArtist != null -> {
+                            val songs = musicRepository.getSongsByArtist(currentArtist!!).first()
+                            playerManager.playSongFromArtist(currentArtist!!, songs, it.filePath, it.id)
+                        }
+                        currentFolderPath != null -> {
+                            val songs = musicRepository.getSongsByFolder(currentFolderPath!!).first()
+                            playerManager.playSongFromFolder(currentFolderPath!!, songs, it.filePath, it.id)
+                        }
+                        else -> {
+                            // 通常モード: コンテキストをクリア
+                            playerManager.clearContextMode()
+                            playerManager.playSong(it.filePath, it.id)
+                        }
+                    }
                 }
             }
         }
@@ -56,6 +83,12 @@ fun SoundWaveNavigation(
             onPermissionsGranted = { hasPermissions = true }
         )
     } else when {
+        currentSongDetailId != null -> {
+            SongDetailScreen(
+                songId = currentSongDetailId!!,
+                onBack = { currentSongDetailId = null }
+            )
+        }
         showWidgetSettings -> {
             WidgetSettingsScreen(
                 onBack = { showWidgetSettings = false }
@@ -82,7 +115,8 @@ fun SoundWaveNavigation(
                 onAlbumSelected = { album -> currentAlbum = album },
                 onArtistSelected = { artist -> currentArtist = artist },
                 onFolderSelected = { folderPath -> currentFolderPath = folderPath },
-                onPlaylistSelected = { playlistId -> currentPlaylistId = playlistId }
+                onPlaylistSelected = { playlistId -> currentPlaylistId = playlistId },
+                onSongDetail = { songId -> currentSongDetailId = songId }
             )
         }
         currentArtist != null -> {
@@ -125,7 +159,8 @@ fun SoundWaveNavigation(
                 onArtistSelected = { artist -> currentArtist = artist },
                 onFolderSelected = { folderPath -> currentFolderPath = folderPath },
                 onPlaylistSelected = { playlistId -> currentPlaylistId = playlistId },
-                onSettingsClick = { showSettings = true }
+                onSettingsClick = { showSettings = true },
+                onSongDetail = { songId -> currentSongDetailId = songId }
             )
         }
     }

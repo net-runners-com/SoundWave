@@ -99,6 +99,9 @@ dependencies {
     // Coil (画像読み込み)
     implementation("io.coil-kt:coil-compose:2.5.0")
     
+    // UCrop (画像クロッピング)
+    implementation("com.github.yalantis:ucrop:2.2.8")
+    
     // Permissions
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
     

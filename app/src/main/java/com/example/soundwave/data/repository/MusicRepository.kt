@@ -171,6 +171,10 @@ class MusicRepository(
     suspend fun incrementPlayCount(id: Long) {
         songDao.incrementPlayCount(id, System.currentTimeMillis())
     }
+    
+    suspend fun updateSong(song: SongEntity) = withContext(Dispatchers.IO) {
+        songDao.updateSong(song)
+    }
 }
 
 

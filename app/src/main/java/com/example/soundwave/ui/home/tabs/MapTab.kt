@@ -11,7 +11,9 @@ import android.webkit.WebViewClient
 import android.webkit.GeolocationPermissions
 import com.example.soundwave.data.AppDatabaseModule
 import com.example.soundwave.data.repository.MusicRepository
+import com.example.soundwave.data.repository.PlaylistRepository
 import com.example.soundwave.player.PlayerManager
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -99,11 +101,108 @@ private val leafletHtml = """
        background: transparent !important;
        border: none !important;
      }
+     /* 円のtooltip（名前表示）のスタイル */
+     .draw-label {
+       background: rgba(0, 0, 0, 0.8) !important;
+       border: 2px solid #4CAF50 !important;
+       border-radius: 8px !important;
+       color: white !important;
+       font-size: 14px !important;
+       font-weight: bold !important;
+       padding: 6px 12px !important;
+       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+       white-space: nowrap !important;
+     }
+     .draw-label:before {
+       border-top-color: #4CAF50 !important;
+     }
+     /* プレイリスト選択モーダルのスタイル */
+     #playlistSelectModal {
+       position: fixed;
+       top: 0;
+       left: 0;
+       width: 100%;
+       height: 100%;
+       background-color: rgba(0, 0, 0, 0.7);
+       display: none;
+       z-index: 10000;
+       justify-content: center;
+       align-items: center;
+     }
+     #playlistSelectContainer {
+       background: #2c2c2c;
+       padding: 24px;
+       border-radius: 12px;
+       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+       max-width: 90%;
+       max-height: 90%;
+       min-width: 320px;
+     }
+     #playlistSelectContainer h3 {
+       color: white;
+       margin-top: 0;
+       margin-bottom: 20px;
+       font-size: 18px;
+     }
+     #playlistSelect {
+       width: 100%;
+       padding: 12px;
+       font-size: 16px;
+       border: 2px solid #555;
+       border-radius: 8px;
+       background: #1a1a1a;
+       color: white;
+       margin-bottom: 20px;
+       cursor: pointer;
+     }
+     #playlistSelect:focus {
+       outline: none;
+       border-color: #4CAF50;
+     }
+     #playlistSelectButtons {
+       display: flex;
+       gap: 12px;
+       justify-content: flex-end;
+     }
+     #playlistSelectButtons button {
+       padding: 12px 24px;
+       border: none;
+       border-radius: 8px;
+       cursor: pointer;
+       font-size: 16px;
+       font-weight: 500;
+       transition: opacity 0.2s;
+     }
+     #playlistSelectButtons button:active {
+       opacity: 0.7;
+     }
+     #playlistSelectOk {
+       background: #4CAF50;
+       color: white;
+     }
+     #playlistSelectCancel {
+       background: #666;
+       color: white;
+     }
    </style>
 </head>
 <body>
 
 <div id="map"></div>
+
+<!-- プレイリスト選択モーダル -->
+<div id="playlistSelectModal">
+  <div id="playlistSelectContainer">
+    <h3>プレイリストを選択</h3>
+    <select id="playlistSelect">
+      <option value="0">プレイリストなし（最新曲を再生）</option>
+    </select>
+    <div id="playlistSelectButtons">
+      <button id="playlistSelectCancel">キャンセル</button>
+      <button id="playlistSelectOk">OK</button>
+    </div>
+  </div>
+</div>
 
 <script>
   console.log("Leaflet loaded:", window.L);
@@ -201,9 +300,25 @@ private val leafletHtml = """
     
     // 円の中に入った瞬間（前回は外にいて、今回は中にいる）に音楽を再生
     if (isInCircle && !wasInCircle) {
-      console.log("Entered circle! Playing latest song.");
+      // どの円に入ったかを特定
+      let playlistId = null;
+      drawnItems.eachLayer(function(layer) {
+        if (layer instanceof L.Circle) {
+          if (isLocationInCircle(currentLocation, layer)) {
+            if (layer.feature && layer.feature.properties && layer.feature.properties.playlistId) {
+              playlistId = layer.feature.properties.playlistId;
+            }
+          }
+        }
+      });
+      
+      console.log("Entered circle! Playing playlist: " + (playlistId || "latest song"));
       if (typeof AndroidLocation !== 'undefined') {
-        AndroidLocation.playLatestSong();
+        if (playlistId) {
+          AndroidLocation.playPlaylist(playlistId);
+        } else {
+          AndroidLocation.playLatestSong();
+        }
       }
     }
     
@@ -314,6 +429,95 @@ private val leafletHtml = """
     console.log("Map interaction enabled");
   });
 
+  // プレイリスト選択モーダルを表示する関数
+  function showPlaylistSelector(callback) {
+    const playlistSelectModal = document.getElementById('playlistSelectModal');
+    const playlistSelect = document.getElementById('playlistSelect');
+    const playlistSelectOk = document.getElementById('playlistSelectOk');
+    const playlistSelectCancel = document.getElementById('playlistSelectCancel');
+    
+    // プレイリスト一覧を取得
+    let playlists = [];
+    if (typeof AndroidLocation !== 'undefined') {
+      const playlistsJson = AndroidLocation.getAllPlaylists();
+      try {
+        playlists = JSON.parse(playlistsJson);
+      } catch (e) {
+        console.error("Failed to parse playlists:", e);
+      }
+    }
+    
+    // セレクトボックスをクリアしてオプションを追加
+    playlistSelect.innerHTML = '<option value="0">プレイリストなし（最新曲を再生）</option>';
+    playlists.forEach(function(playlist) {
+      const option = document.createElement('option');
+      option.value = playlist.id;
+      option.textContent = playlist.name;
+      playlistSelect.appendChild(option);
+    });
+    
+    // モーダルを表示
+    playlistSelectModal.style.display = 'flex';
+    
+    // 既存のイベントリスナーを削除するためのフラグ
+    let handlersAttached = false;
+    
+    // OKボタンの処理
+    const okHandler = function() {
+      if (!handlersAttached) return;
+      const selectedValue = playlistSelect.value;
+      playlistSelectModal.style.display = 'none';
+      playlistSelectOk.removeEventListener('click', okHandler);
+      playlistSelectCancel.removeEventListener('click', cancelHandler);
+      document.removeEventListener('keydown', keyHandler);
+      playlistSelectModal.removeEventListener('click', modalClickHandler);
+      handlersAttached = false;
+      
+      if (selectedValue === "0" || selectedValue === null) {
+        callback(null);
+      } else {
+        callback(parseInt(selectedValue));
+      }
+    };
+    
+    // キャンセルボタンの処理
+    const cancelHandler = function() {
+      if (!handlersAttached) return;
+      playlistSelectModal.style.display = 'none';
+      playlistSelectOk.removeEventListener('click', okHandler);
+      playlistSelectCancel.removeEventListener('click', cancelHandler);
+      document.removeEventListener('keydown', keyHandler);
+      playlistSelectModal.removeEventListener('click', modalClickHandler);
+      handlersAttached = false;
+      callback(null);
+    };
+    
+    // EnterキーでOK、Escapeキーでキャンセル
+    const keyHandler = function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        okHandler();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelHandler();
+      }
+    };
+    
+    // モーダル外をクリックしたら閉じる
+    const modalClickHandler = function(e) {
+      if (e.target === playlistSelectModal) {
+        cancelHandler();
+      }
+    };
+    
+    // イベントリスナーを追加
+    playlistSelectOk.addEventListener('click', okHandler);
+    playlistSelectCancel.addEventListener('click', cancelHandler);
+    document.addEventListener('keydown', keyHandler);
+    playlistSelectModal.addEventListener('click', modalClickHandler);
+    handlersAttached = true;
+  }
+  
   // 円が描画されたときの処理
   map.on(L.Draw.Event.CREATED, function (e) {
     const layer = e.layer;
@@ -322,29 +526,60 @@ private val leafletHtml = """
     if (type === 'circle') {
       currentCircle = layer;
       
+      // 名前を入力
       const title = prompt("名前を入力してください", "デフォルト");
       
-      if (!layer.feature) {
-        layer.feature = {};
+      if (!title) {
+        map.removeLayer(layer);
+        return;
       }
-      layer.feature.properties = layer.feature.properties || {};
-      layer.feature.properties.title = title || "デフォルト";
       
-      const popupContent = '<b>名前: </b>' + (title || "デフォルト");
-      layer.bindPopup(popupContent, {
-        'maxWidth': '400',
-        'className': 'PopupDrawCircle'
+      // プレイリスト選択モーダルを表示
+      showPlaylistSelector(function(selectedPlaylistId) {
+        // キャンセルされた場合は円を削除
+        if (selectedPlaylistId === null) {
+          map.removeLayer(layer);
+          return;
+        }
+        
+        // プレイリスト名を取得
+        let playlists = [];
+        if (typeof AndroidLocation !== 'undefined') {
+          const playlistsJson = AndroidLocation.getAllPlaylists();
+          try {
+            playlists = JSON.parse(playlistsJson);
+          } catch (e) {
+            console.error("Failed to parse playlists:", e);
+          }
+        }
+        
+        const playlistName = selectedPlaylistId ? 
+          (playlists.find(function(p) { return p.id === selectedPlaylistId; })?.name || "不明") : 
+          "最新曲";
+        
+        if (!layer.feature) {
+          layer.feature = {};
+        }
+        layer.feature.properties = layer.feature.properties || {};
+        layer.feature.properties.title = title || "デフォルト";
+        layer.feature.properties.playlistId = selectedPlaylistId;
+        
+        const popupContent = '<b>名前: </b>' + (title || "デフォルト") + '<br><b>プレイリスト: </b>' + playlistName;
+        layer.bindPopup(popupContent, {
+          'maxWidth': '400',
+          'className': 'PopupDrawCircle'
+        });
+        
+        layer.bindTooltip(title || "デフォルト", {
+          permanent: true,
+          direction: 'center',
+          offset: [0, 0],
+          className: 'draw-label',
+          noWrap: true
+        });
+        
+        drawnItems.addLayer(layer);
       });
-      
-      layer.bindTooltip(title || "デフォルト", {
-        permanent: true,
-        direction: 'center',
-        offset: [0, 0],
-        className: 'draw-label',
-        noWrap: true
-      });
-      
-      drawnItems.addLayer(layer);
     }
   });
 
@@ -486,6 +721,7 @@ fun MapTab() {
 class LocationSaveInterface(private val context: Context) {
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val musicRepository = AppDatabaseModule.getMusicRepository(context)
+    private val playlistRepository = AppDatabaseModule.getPlaylistRepository(context)
     private val playerManager = PlayerManager.getInstance(context)
     
     @JavascriptInterface
@@ -537,10 +773,40 @@ class LocationSaveInterface(private val context: Context) {
     fun stopMusic() {
         coroutineScope.launch(Dispatchers.Main) {
             try {
-                android.util.Log.d("LocationSave", "Stopping music")
+                android.util.Log.d("LocationSave", "Stopping music and clearing playlist mode")
                 playerManager.pause()
+                playerManager.clearPlaylistMode()
             } catch (e: Exception) {
                 android.util.Log.e("LocationSave", "Error stopping music", e)
+            }
+        }
+    }
+    
+    @JavascriptInterface
+    fun getAllPlaylists(): String {
+        return try {
+            val playlists = kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                playlistRepository.getAllPlaylists().first()
+            }
+            val playlistsJson = playlists.map { 
+                """{"id":${it.id},"name":"${it.name}"}"""
+            }.joinToString(",", "[", "]")
+            android.util.Log.d("LocationSave", "Returning playlists: $playlistsJson")
+            playlistsJson
+        } catch (e: Exception) {
+            android.util.Log.e("LocationSave", "Error getting playlists", e)
+            "[]"
+        }
+    }
+    
+    @JavascriptInterface
+    fun playPlaylist(playlistId: Long) {
+        coroutineScope.launch(Dispatchers.Main) {
+            try {
+                android.util.Log.d("LocationSave", "Playing playlist: $playlistId")
+                playerManager.playPlaylist(playlistId)
+            } catch (e: Exception) {
+                android.util.Log.e("LocationSave", "Error playing playlist", e)
             }
         }
     }

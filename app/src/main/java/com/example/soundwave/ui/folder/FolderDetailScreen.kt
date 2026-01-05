@@ -50,7 +50,8 @@ fun FolderDetailScreen(
     onAlbumSelected: (String) -> Unit = {},
     onArtistSelected: (String) -> Unit = {},
     onFolderSelected: (String) -> Unit = {},
-    onPlaylistSelected: (Long) -> Unit = {}
+    onPlaylistSelected: (Long) -> Unit = {},
+    onSongDetail: (Long) -> Unit = {}
 ) {
     val context = LocalContext.current
     val musicRepository = remember { AppDatabaseModule.getMusicRepository(context) }

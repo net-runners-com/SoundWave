@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -51,7 +52,8 @@ fun AlbumDetailScreen(
     onAlbumSelected: (String) -> Unit = {},
     onArtistSelected: (String) -> Unit = {},
     onFolderSelected: (String) -> Unit = {},
-    onPlaylistSelected: (Long) -> Unit = {}
+    onPlaylistSelected: (Long) -> Unit = {},
+    onSongDetail: (Long) -> Unit = {}
 ) {
     val context = LocalContext.current
     val musicRepository = remember { AppDatabaseModule.getMusicRepository(context) }
@@ -307,6 +309,34 @@ fun AlbumDetailScreen(
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                }
+                                
+                                // ケバブメニュー
+                                var showMenu by remember { mutableStateOf(false) }
+                                Box {
+                                    IconButton(
+                                        onClick = { showMenu = true }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.MoreVert,
+                                            contentDescription = "メニュー"
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = showMenu,
+                                        onDismissRequest = { showMenu = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("詳細") },
+                                            onClick = {
+                                                showMenu = false
+                                                onSongDetail(song.id)
+                                            },
+                                            leadingIcon = {
+                                                Icon(Icons.Default.Info, contentDescription = null)
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }

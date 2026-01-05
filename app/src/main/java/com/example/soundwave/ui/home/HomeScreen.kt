@@ -39,7 +39,8 @@ fun HomeScreen(
     onArtistSelected: (String) -> Unit = {},
     onFolderSelected: (String) -> Unit = {},
     onPlaylistSelected: (Long) -> Unit = {},
-    onSettingsClick: () -> Unit = {}
+    onSettingsClick: () -> Unit = {},
+    onSongDetail: (Long) -> Unit = {}
 ) {
     val context = LocalContext.current
     val playlistRepository = remember { AppDatabaseModule.getPlaylistRepository(context) }
@@ -297,7 +298,8 @@ fun HomeScreen(
                         onSelectionModeChanged = { isSelectionMode = it },
                         onSelectedSongsChanged = { selectedSongs = it },
                         onShowPlaylistOptions = { showPlaylistOptionsFromHeader = true },
-                        externalClearSelection = clearSelectionTrigger
+                        externalClearSelection = clearSelectionTrigger,
+                        onSongDetail = onSongDetail
                     )
                     TabItem.ALBUMS -> AlbumsTab(
                         viewModel = viewModel,
