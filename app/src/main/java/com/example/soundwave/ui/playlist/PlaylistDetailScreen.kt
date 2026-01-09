@@ -284,9 +284,13 @@ fun PlaylistDetailScreen(
                                         .clip(MaterialTheme.shapes.medium)
                                 ) {
                                     if (song.albumArtPath != null && song.albumArtPath.isNotBlank()) {
+                                        // タイムスタンプパラメータを削除して元のパスを取得（表示用）
+                                        val imagePathForDisplay = song.albumArtPath.substringBefore("?t=").substringBefore("&t=")
+                                        // ファイルパスからFileオブジェクトを作成して使用
+                                        val imageFile = java.io.File(imagePathForDisplay)
                                         val imagePainter = rememberAsyncImagePainter(
                                             model = ImageRequest.Builder(context)
-                                                .data(song.albumArtPath)
+                                                .data(imageFile)
                                                 .crossfade(true)
                                                 .build()
                                         )

@@ -1,8 +1,14 @@
 package com.example.soundwave
 
+import android.Manifest
 import android.app.Application
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import com.example.soundwave.data.AppDatabaseModule
 import com.example.soundwave.data.repository.MusicRepository
+import com.example.soundwave.service.LocationMonitoringService
 import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +47,39 @@ class SoundWaveApplication : Application() {
                 android.util.Log.e("SoundWaveApplication", "Failed to initialize YoutubeDL", e)
                 // 初期化失敗は後で再試行可能
             }
+        }
+        
+        // 位置情報監視サービスを起動（権限があれば）
+        startLocationMonitoringServiceIfPermitted()
+    }
+    
+    private fun startLocationMonitoringServiceIfPermitted() {
+        val hasFineLocation = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        
+        val hasCoarseLocation = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        
+        if (hasFineLocation || hasCoarseLocation) {
+            try {
+                val intent = Intent(this, LocationMonitoringService::class.java).apply {
+                    action = LocationMonitoringService.ACTION_START_MONITORING
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(intent)
+                } else {
+                    startService(intent)
+                }
+                android.util.Log.d("SoundWaveApplication", "Location monitoring service started")
+            } catch (e: Exception) {
+                android.util.Log.e("SoundWaveApplication", "Failed to start location monitoring service", e)
+            }
+        } else {
+            android.util.Log.d("SoundWaveApplication", "Location permissions not granted, skipping service start")
         }
     }
 }

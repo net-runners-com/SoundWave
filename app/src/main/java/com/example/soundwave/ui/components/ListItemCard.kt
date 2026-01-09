@@ -38,10 +38,14 @@ fun ListItemCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 画像の遅延読み込み (Coil)
-            if (imageUrl != null) {
+            if (imageUrl != null && imageUrl.isNotBlank()) {
+                // タイムスタンプパラメータを削除して元のパスを取得（表示用）
+                val imagePathForDisplay = imageUrl.substringBefore("?t=").substringBefore("&t=")
+                // ファイルパスからFileオブジェクトを作成して使用
+                val imageFile = java.io.File(imagePathForDisplay)
                 val imagePainter = rememberAsyncImagePainter(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(imageUrl)
+                        .data(imageFile)
                         .crossfade(true)
                         .build()
                 )

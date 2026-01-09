@@ -95,6 +95,14 @@ class MusicPlayerService : Service() {
                         override fun onPlaybackStateChanged(playbackState: Int) {
                             when (playbackState) {
                                 Player.STATE_READY -> {
+                                    // PlayerManagerの状態も更新（曲が切り替わった場合に備えて）
+                                    try {
+                                        val playerManager = PlayerManager.getInstance(applicationContext)
+                                        playerManager.setCurrentSongId(currentSongId)
+                                        playerManager.setPlaying(exoPlayer?.isPlaying ?: false)
+                                    } catch (e: Exception) {
+                                        android.util.Log.w("MusicPlayerService", "Could not update PlayerManager state in STATE_READY", e)
+                                    }
                                     updateNotification()
                                     updateWidget()
                                 }
@@ -183,6 +191,15 @@ class MusicPlayerService : Service() {
                             player.prepare()
                             player.play()
                             
+                            // PlayerManagerの状態を更新
+                            try {
+                                val playerManager = PlayerManager.getInstance(applicationContext)
+                                playerManager.setCurrentSongId(songId)
+                                playerManager.setPlaying(true)
+                            } catch (e: Exception) {
+                                android.util.Log.w("MusicPlayerService", "Could not update PlayerManager state", e)
+                            }
+                            
                             // エフェクトを適用
                             val audioSessionId = player.audioSessionId
                             if (audioSessionId != 0) {
@@ -199,6 +216,15 @@ class MusicPlayerService : Service() {
                             player.setMediaItem(mediaItem)
                             player.prepare()
                             player.play()
+                            
+                            // PlayerManagerの状態を更新
+                            try {
+                                val playerManager = PlayerManager.getInstance(applicationContext)
+                                playerManager.setCurrentSongId(songId)
+                                playerManager.setPlaying(true)
+                            } catch (e: Exception) {
+                                android.util.Log.w("MusicPlayerService", "Could not update PlayerManager state", e)
+                            }
                             
                             // エフェクトを適用
                             val audioSessionId = player.audioSessionId
@@ -218,6 +244,15 @@ class MusicPlayerService : Service() {
                         player.setMediaItem(mediaItem)
                         player.prepare()
                         player.play()
+                        
+                        // PlayerManagerの状態を更新
+                        try {
+                            val playerManager = PlayerManager.getInstance(applicationContext)
+                            playerManager.setCurrentSongId(songId)
+                            playerManager.setPlaying(true)
+                        } catch (e: Exception) {
+                            android.util.Log.w("MusicPlayerService", "Could not update PlayerManager state", e)
+                        }
                         
                         // エフェクトを適用
                         val audioSessionId = player.audioSessionId
@@ -341,9 +376,11 @@ class MusicPlayerService : Service() {
                     // 何もしない
                 }
                 RepeatMode.NONE -> {
-                    // ループなし: 再生を停止
+                    // ループなし: 先頭に戻して停止
                     try {
+                        player.seekTo(0)
                         pause()
+                        android.util.Log.d("MusicPlayerService", "Song ended, reset to beginning and paused")
                     } catch (e: Exception) {
                         android.util.Log.e("MusicPlayerService", "Error in NONE handling", e)
                     }

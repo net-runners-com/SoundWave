@@ -28,6 +28,7 @@ import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.example.soundwave.data.AppDatabaseModule
+import java.io.File
 import com.example.soundwave.ui.components.EmptyState
 import com.example.soundwave.ui.components.ListItemCard
 import com.example.soundwave.ui.components.CreatePlaylistDialog
@@ -201,9 +202,13 @@ fun SongsTab(
                                     .clip(MaterialTheme.shapes.medium)
                             ) {
                                 if (song.albumArtPath != null && song.albumArtPath.isNotBlank()) {
+                                    // タイムスタンプパラメータを削除して元のパスを取得（表示用）
+                                    val imagePathForDisplay = song.albumArtPath.substringBefore("?t=").substringBefore("&t=")
+                                    // ファイルパスからFileオブジェクトを作成して使用
+                                    val imageFile = File(imagePathForDisplay)
                                     val imagePainter = rememberAsyncImagePainter(
                                         model = ImageRequest.Builder(LocalContext.current)
-                                            .data(song.albumArtPath)
+                                            .data(imageFile)
                                             .crossfade(true)
                                             .build()
                                     )

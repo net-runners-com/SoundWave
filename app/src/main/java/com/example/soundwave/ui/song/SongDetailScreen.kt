@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
+import coil.ImageLoader
 import com.example.soundwave.data.AppDatabaseModule
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -64,12 +65,66 @@ fun SongDetailScreen(
             val resultUri = UCrop.getOutput(result.data ?: return@rememberLauncherForActivityResult)
             resultUri?.let { croppedUri ->
                 scope.launch(Dispatchers.IO) {
-                    // クロッピングされた画像のパスを取得して保存
-                    val imagePath = croppedUri.toString()
-                    song?.let { currentSong ->
-                        val updatedSong = currentSong.copy(albumArtPath = imagePath)
-                        musicRepository.updateSong(updatedSong)
-                        song = updatedSong
+                    try {
+                        song?.let { currentSong ->
+                            // 保存先ディレクトリを取得（アプリ専用の外部ストレージ）
+                            val albumArtDir = context.getExternalFilesDir("album_art") ?: context.filesDir.resolve("album_art")
+                            if (!albumArtDir.exists()) {
+                                albumArtDir.mkdirs()
+                            }
+                            
+                            // 永続的なファイル名（曲IDを使用）
+                            val albumArtFile = File(albumArtDir, "album_art_${currentSong.id}.jpg")
+                            
+                            // クロッピングされた画像を永続的な場所にコピー
+                            val inputStream = context.contentResolver.openInputStream(croppedUri)
+                            if (inputStream != null) {
+                                inputStream.use { input ->
+                                    albumArtFile.outputStream().use { output ->
+                                        input.copyTo(output)
+                                    }
+                                }
+                            }
+                            
+                            // ファイルパスを保存（ファイルパスを直接保存、タイムスタンプは別途管理）
+                            val imagePath = albumArtFile.absolutePath
+                            val timestamp = System.currentTimeMillis()
+                            // タイムスタンプは別途クエリパラメータとして保存（表示時のキャッシュ無効化用）
+                            val imagePathWithTimestamp = "$imagePath?t=$timestamp"
+                            
+                            val updatedSong = currentSong.copy(albumArtPath = imagePathWithTimestamp)
+                            musicRepository.updateSong(updatedSong)
+                            
+                            song = updatedSong
+                            android.util.Log.d("SongDetailScreen", "Updated album art: $imagePathWithTimestamp")
+                            
+                            // 古いファイルが残っている場合は削除（一時ファイル）
+                            try {
+                                val oldPathNullable = currentSong.albumArtPath?.substringBefore("?t=")?.substringBefore("&t=")
+                                oldPathNullable?.let { oldPath ->
+                                    if (oldPath.isNotBlank() && oldPath.contains("cache")) {
+                                        val oldFile = try {
+                                            val uri = Uri.parse(oldPath)
+                                            val path = uri.path ?: oldPath
+                                            File(path)
+                                        } catch (e: Exception) {
+                                            File(oldPath)
+                                        }
+                                        try {
+                                            if (oldFile.exists()) {
+                                                oldFile.delete()
+                                            }
+                                        } catch (e: Exception) {
+                                            // ファイル削除に失敗しても続行
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                android.util.Log.w("SongDetailScreen", "Failed to delete old file", e)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("SongDetailScreen", "Error saving album art", e)
                     }
                 }
             }
@@ -84,10 +139,9 @@ fun SongDetailScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let { sourceUri ->
-            // クロッピング用の一時ファイルを作成
-            val destinationUri = Uri.fromFile(
-                File(context.cacheDir, "cropped_${System.currentTimeMillis()}.jpg")
-            )
+            // クロッピング用の一時ファイルを作成（cacheDirに一時保存）
+            val tempFile = File(context.cacheDir, "temp_crop_${System.currentTimeMillis()}.jpg")
+            val destinationUri = Uri.fromFile(tempFile)
             
             // UCropオプションを設定
             val options = UCrop.Options().apply {
@@ -150,11 +204,20 @@ fun SongDetailScreen(
                         .clickable { imagePickerLauncher.launch("image/*") }
                 ) {
                     if (currentSong.albumArtPath != null && currentSong.albumArtPath.isNotBlank()) {
+                        // タイムスタンプパラメータを削除して元のパスを取得（表示用）
+                        val imagePathForDisplay = currentSong.albumArtPath.substringBefore("?t=").substringBefore("&t=")
+                        // ファイルパスからFileオブジェクトを作成して使用
+                        val imageFile = File(imagePathForDisplay)
                         val imagePainter = rememberAsyncImagePainter(
                             model = ImageRequest.Builder(context)
-                                .data(currentSong.albumArtPath)
+                                .data(imageFile)
                                 .crossfade(true)
-                                .build()
+                                .build(),
+                            onState = { state ->
+                                if (state is coil.compose.AsyncImagePainter.State.Error) {
+                                    android.util.Log.e("SongDetailScreen", "Image load error: ${state.result.throwable.message}, path: $imagePathForDisplay, exists: ${imageFile.exists()}")
+                                }
+                            }
                         )
                         
                         when (imagePainter.state) {

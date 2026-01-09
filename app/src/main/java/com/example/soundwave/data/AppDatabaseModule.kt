@@ -6,6 +6,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.soundwave.data.database.SoundWaveDatabase
 import com.example.soundwave.data.repository.LyricsRepository
+import com.example.soundwave.data.repository.LocationCircleRepository
 import com.example.soundwave.data.repository.MusicRepository
 import com.example.soundwave.data.repository.PlaylistRepository
 
@@ -30,6 +31,23 @@ object AppDatabaseModule {
         }
     }
     
+    private val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("""
+                CREATE TABLE IF NOT EXISTS location_circles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    radius REAL NOT NULL,
+                    playlistId INTEGER,
+                    dateCreated INTEGER NOT NULL,
+                    dateModified INTEGER NOT NULL
+                )
+            """.trimIndent())
+        }
+    }
+    
     fun getDatabase(context: Context): SoundWaveDatabase {
         if (database == null) {
             database = Room.databaseBuilder(
@@ -37,7 +55,7 @@ object AppDatabaseModule {
                 SoundWaveDatabase::class.java,
                 "soundwave_database"
             )
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .build()
         }
         return database!!
@@ -56,6 +74,11 @@ object AppDatabaseModule {
     fun getLyricsRepository(context: Context): LyricsRepository {
         val db = getDatabase(context)
         return LyricsRepository(db.lyricsDao(), context)
+    }
+    
+    fun getLocationCircleRepository(context: Context): LocationCircleRepository {
+        val db = getDatabase(context)
+        return LocationCircleRepository(db.locationCircleDao())
     }
 }
 

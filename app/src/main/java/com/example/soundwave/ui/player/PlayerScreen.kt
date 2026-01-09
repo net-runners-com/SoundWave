@@ -139,7 +139,9 @@ fun PlayerScreen(
         ) {
             // 背景：アルバムアートをぼかして表示（歌詞がある場合のみ）
             val albumArtPath = currentSong?.albumArtPath
-            if (showLyrics && albumArtPath != null) {
+            if (showLyrics && albumArtPath != null && albumArtPath.isNotBlank()) {
+                // タイムスタンプパラメータを削除して元のパスを取得（表示用）
+                val imagePathForDisplay = albumArtPath.substringBefore("?t=").substringBefore("&t=")
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -148,7 +150,7 @@ fun PlayerScreen(
                 ) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data(albumArtPath)
+                            .data("$imagePathForDisplay?t=${albumArtPath.hashCode()}") // タイムスタンプを含めてキャッシュを無効化
                             .crossfade(true)
                             .build(),
                         contentDescription = null,
@@ -915,21 +917,25 @@ private fun LyricsView(
     Box(modifier = modifier.fillMaxSize()) {
         // 背景：アルバムアートをぼかして表示
         currentSong?.albumArtPath?.let { albumArtPath ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .blur(50.dp)
-                    .scale(1.2f)
-            ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(albumArtPath)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
+            if (albumArtPath.isNotBlank()) {
+                // タイムスタンプパラメータを削除して元のパスを取得（表示用）
+                val imagePathForDisplay = albumArtPath.substringBefore("?t=").substringBefore("&t=")
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .blur(50.dp)
+                        .scale(1.2f)
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data("$imagePathForDisplay?t=${albumArtPath.hashCode()}") // タイムスタンプを含めてキャッシュを無効化
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
             }
         }
         
@@ -959,18 +965,22 @@ private fun LyricsView(
             ) {
                 // 小さなアルバムアート
                 currentSong?.albumArtPath?.let { albumArtPath ->
-                    AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(albumArtPath)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(MaterialTheme.shapes.small),
-                        contentScale = ContentScale.Crop
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
+                    if (albumArtPath.isNotBlank()) {
+                        // タイムスタンプパラメータを削除して元のパスを取得（表示用）
+                        val imagePathForDisplay = albumArtPath.substringBefore("?t=").substringBefore("&t=")
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data("$imagePathForDisplay?t=${albumArtPath.hashCode()}") // タイムスタンプを含めてキャッシュを無効化
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(MaterialTheme.shapes.small),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                    }
                 }
                 
                 // 曲名とアーティスト名

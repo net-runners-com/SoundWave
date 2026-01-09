@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
@@ -123,10 +124,29 @@ fun HomeScreen(
                         if (isSelectionMode) {
                             Text("選択中")
                         } else {
-                            Box(
+                            Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                contentAlignment = Alignment.Center
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
+                                // アプリアイコンを表示
+                                // drawableフォルダにapp_icon.pngを追加したら、以下のコメントを外して使用してください
+                                // Icon(
+                                //     painter = painterResource(id = R.drawable.app_icon),
+                                //     contentDescription = "SoundWave",
+                                //     modifier = Modifier
+                                //         .size(24.dp)
+                                //         .padding(end = 8.dp),
+                                //     tint = MaterialTheme.colorScheme.onSurface
+                                // )
+                                Icon(
+                                    imageVector = Icons.Default.MusicNote,
+                                    contentDescription = "SoundWave",
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .padding(end = 8.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
                                 Text(
                                     text = "SoundWave",
                                     textAlign = TextAlign.Center
