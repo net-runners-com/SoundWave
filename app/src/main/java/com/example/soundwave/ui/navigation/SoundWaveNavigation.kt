@@ -132,16 +132,24 @@ fun SoundWaveNavigation(
                 HomeScreen(
                     onSongSelected = onSongClick,
                     onAlbumSelected = { album -> 
-                        navController.navigate(SoundWaveRoutes.album(album))
+                        navController.navigate(SoundWaveRoutes.album(album)) {
+                            launchSingleTop = false
+                        }
                     },
                     onArtistSelected = { artist -> 
-                        navController.navigate(SoundWaveRoutes.artist(artist))
+                        navController.navigate(SoundWaveRoutes.artist(artist)) {
+                            launchSingleTop = false
+                        }
                     },
                     onFolderSelected = { folderPath -> 
-                        navController.navigate(SoundWaveRoutes.folder(folderPath))
+                        navController.navigate(SoundWaveRoutes.folder(folderPath)) {
+                            launchSingleTop = false
+                        }
                     },
                     onPlaylistSelected = { playlistId -> 
-                        navController.navigate(SoundWaveRoutes.playlist(playlistId))
+                        navController.navigate(SoundWaveRoutes.playlist(playlistId)) {
+                            launchSingleTop = false
+                        }
                     },
                     onSettingsClick = { 
                         navController.navigate(SoundWaveRoutes.SETTINGS)
@@ -197,19 +205,34 @@ fun SoundWaveNavigation(
                 
                 AlbumDetailScreen(
                     albumName = albumName,
-                    onBack = { navController.popBackStack() },
+                    onBack = { 
+                        // バックスタックが複数ある場合は前の画面に戻る、なければHOMEに戻る
+                        if (!navController.popBackStack()) {
+                            navController.navigate(SoundWaveRoutes.HOME) {
+                                popUpTo(SoundWaveRoutes.HOME) { inclusive = true }
+                            }
+                        }
+                    },
                     onSongSelected = onSongClick,
                     onAlbumSelected = { album -> 
-                        navController.navigate(SoundWaveRoutes.album(album))
+                        navController.navigate(SoundWaveRoutes.album(album)) {
+                            launchSingleTop = false
+                        }
                     },
                     onArtistSelected = { artist -> 
-                        navController.navigate(SoundWaveRoutes.artist(artist))
+                        navController.navigate(SoundWaveRoutes.artist(artist)) {
+                            launchSingleTop = false
+                        }
                     },
                     onFolderSelected = { folderPath -> 
-                        navController.navigate(SoundWaveRoutes.folder(folderPath))
+                        navController.navigate(SoundWaveRoutes.folder(folderPath)) {
+                            launchSingleTop = false
+                        }
                     },
                     onPlaylistSelected = { playlistId -> 
-                        navController.navigate(SoundWaveRoutes.playlist(playlistId))
+                        navController.navigate(SoundWaveRoutes.playlist(playlistId)) {
+                            launchSingleTop = false
+                        }
                     },
                     onSongDetail = { songId -> 
                         // ボトムシートで表示するため、ナビゲーションは不要
@@ -226,19 +249,34 @@ fun SoundWaveNavigation(
                 
                 ArtistDetailScreen(
                     artistName = artistName,
-                    onBack = { navController.popBackStack() },
+                    onBack = { 
+                        // バックスタックが複数ある場合は前の画面に戻る、なければHOMEに戻る
+                        if (!navController.popBackStack()) {
+                            navController.navigate(SoundWaveRoutes.HOME) {
+                                popUpTo(SoundWaveRoutes.HOME) { inclusive = true }
+                            }
+                        }
+                    },
                     onSongSelected = onSongClick,
                     onAlbumSelected = { album -> 
-                        navController.navigate(SoundWaveRoutes.album(album))
+                        navController.navigate(SoundWaveRoutes.album(album)) {
+                            launchSingleTop = false
+                        }
                     },
                     onArtistSelected = { artist -> 
-                        navController.navigate(SoundWaveRoutes.artist(artist))
+                        navController.navigate(SoundWaveRoutes.artist(artist)) {
+                            launchSingleTop = false
+                        }
                     },
                     onFolderSelected = { folderPath -> 
-                        navController.navigate(SoundWaveRoutes.folder(folderPath))
+                        navController.navigate(SoundWaveRoutes.folder(folderPath)) {
+                            launchSingleTop = false
+                        }
                     },
                     onPlaylistSelected = { playlistId -> 
-                        navController.navigate(SoundWaveRoutes.playlist(playlistId))
+                        navController.navigate(SoundWaveRoutes.playlist(playlistId)) {
+                            launchSingleTop = false
+                        }
                     }
                 )
             }
@@ -252,19 +290,34 @@ fun SoundWaveNavigation(
                 
                 FolderDetailScreen(
                     folderPath = folderPath,
-                    onBack = { navController.popBackStack() },
+                    onBack = { 
+                        // バックスタックが複数ある場合は前の画面に戻る、なければHOMEに戻る
+                        if (!navController.popBackStack()) {
+                            navController.navigate(SoundWaveRoutes.HOME) {
+                                popUpTo(SoundWaveRoutes.HOME) { inclusive = true }
+                            }
+                        }
+                    },
                     onSongSelected = onSongClick,
                     onAlbumSelected = { album -> 
-                        navController.navigate(SoundWaveRoutes.album(album))
+                        navController.navigate(SoundWaveRoutes.album(album)) {
+                            launchSingleTop = false
+                        }
                     },
                     onArtistSelected = { artist -> 
-                        navController.navigate(SoundWaveRoutes.artist(artist))
+                        navController.navigate(SoundWaveRoutes.artist(artist)) {
+                            launchSingleTop = false
+                        }
                     },
                     onFolderSelected = { path -> 
-                        navController.navigate(SoundWaveRoutes.folder(path))
+                        navController.navigate(SoundWaveRoutes.folder(path)) {
+                            launchSingleTop = false
+                        }
                     },
                     onPlaylistSelected = { playlistId -> 
-                        navController.navigate(SoundWaveRoutes.playlist(playlistId))
+                        navController.navigate(SoundWaveRoutes.playlist(playlistId)) {
+                            launchSingleTop = false
+                        }
                     }
                 )
             }
@@ -277,19 +330,34 @@ fun SoundWaveNavigation(
                 
                 PlaylistDetailScreen(
                     playlistId = playlistId,
-                    onBack = { navController.popBackStack() },
+                    onBack = { 
+                        // バックスタックが複数ある場合は前の画面に戻る、なければHOMEに戻る
+                        if (!navController.popBackStack()) {
+                            navController.navigate(SoundWaveRoutes.HOME) {
+                                popUpTo(SoundWaveRoutes.HOME) { inclusive = true }
+                            }
+                        }
+                    },
                     onSongSelected = onSongClick,
                     onAlbumSelected = { album -> 
-                        navController.navigate(SoundWaveRoutes.album(album))
+                        navController.navigate(SoundWaveRoutes.album(album)) {
+                            launchSingleTop = false
+                        }
                     },
                     onArtistSelected = { artist -> 
-                        navController.navigate(SoundWaveRoutes.artist(artist))
+                        navController.navigate(SoundWaveRoutes.artist(artist)) {
+                            launchSingleTop = false
+                        }
                     },
                     onFolderSelected = { folderPath -> 
-                        navController.navigate(SoundWaveRoutes.folder(folderPath))
+                        navController.navigate(SoundWaveRoutes.folder(folderPath)) {
+                            launchSingleTop = false
+                        }
                     },
                     onPlaylistSelected = { id -> 
-                        navController.navigate(SoundWaveRoutes.playlist(id))
+                        navController.navigate(SoundWaveRoutes.playlist(id)) {
+                            launchSingleTop = false
+                        }
                     }
                 )
             }

@@ -2,6 +2,7 @@
 
 package com.example.soundwave.ui.album
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -87,6 +88,17 @@ fun AlbumDetailScreen(
     // ボトムシートの状態
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showBottomSheet by remember { mutableStateOf(false) }
+    
+    // システムのバックボタンの処理
+    androidx.activity.compose.BackHandler(enabled = !isSelectionMode) {
+        onBack()
+    }
+    
+    // 選択モード時は選択モードを解除
+    androidx.activity.compose.BackHandler(enabled = isSelectionMode) {
+        isSelectionMode = false
+        selectedSongs = emptySet()
+    }
     
     Scaffold(
         topBar = {

@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
@@ -89,6 +90,17 @@ fun FolderDetailScreen(
     // フォルダ名を取得（パスから最後のディレクトリ名を抽出）
     val folderName = remember(folderPath) {
         folderPath.split("/").lastOrNull() ?: folderPath
+    }
+    
+    // システムのバックボタンの処理
+    BackHandler(enabled = !isSelectionMode) {
+        onBack()
+    }
+    
+    // 選択モード時は選択モードを解除
+    BackHandler(enabled = isSelectionMode) {
+        isSelectionMode = false
+        selectedSongs = emptySet()
     }
     
     Scaffold(

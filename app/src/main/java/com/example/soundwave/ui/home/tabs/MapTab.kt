@@ -88,9 +88,6 @@ private val leafletHtml = """
        background-color: #6750A4;
        color: white;
      }
-     .leaflet-sidebar-tabs > ul > li:hover {
-       background-color: #7d6bb3;
-     }
      .leaflet-sidebar-content {
        background-color: #2c2c2c;
        color: white;
@@ -118,7 +115,6 @@ private val leafletHtml = """
      :root {
        --fab-background: #d0bcff;
        --fab-on-background: #381E72;
-       --fab-hover: #e9ddff;
      }
      /* ズームコントロールを非表示 */
      .leaflet-control-zoom {
@@ -126,17 +122,13 @@ private val leafletHtml = """
      }
      /* Leafletコントロールボタンのサイズを大きく、FABの色を適用 */
      .leaflet-pm-toolbar a {
-       width: 48px !important;
+       width: 56px !important;
        height: 48px !important;
        line-height: 48px !important;
-       font-size: 28px !important;
+       font-size: 18px !important;
        font-weight: bold !important;
-       background-color: var(--fab-background) !important;
-       color: var(--fab-on-background) !important;
-     }
-     .leaflet-control-zoom a:hover,
-     .leaflet-pm-toolbar a:hover {
-       background-color: var(--fab-hover) !important;
+       background-color: #aeaeae !important;
+       color: #ffffff !important;
      }
      .leaflet-control-zoom-in,
      .leaflet-control-zoom-out {
@@ -148,10 +140,6 @@ private val leafletHtml = """
        background-color: var(--fab-background) !important;
        color: var(--fab-on-background) !important;
        border: none !important;
-     }
-     .leaflet-control-zoom-in:hover,
-     .leaflet-control-zoom-out:hover {
-       background-color: var(--fab-hover) !important;
      }
      .leaflet-control-zoom-in span,
      .leaflet-control-zoom-out span {
@@ -176,9 +164,6 @@ private val leafletHtml = """
        background-color: var(--fab-background) !important;
        color: var(--fab-on-background) !important;
        border: none !important;
-     }
-     .leaflet-pm-toolbar .leaflet-buttons-control-button:hover {
-       background-color: var(--fab-hover) !important;
      }
      .leaflet-pm-toolbar .control-icon {
        width: 32px !important;
@@ -359,6 +344,14 @@ private val leafletHtml = """
     marker = L.marker([defaultLat, defaultLng], { icon: currentLocationIcon }).addTo(map);
     window.marker = marker;
   }
+  
+  // 現在地追尾フラグ（初期値はtrue）
+  window.isTrackingLocation = true;
+  
+  // ユーザーが手動で地図を移動した場合、追尾を停止
+  map.on('dragstart', function() {
+    window.isTrackingLocation = false;
+  });
 
   // 現在地が円の中にあるかどうかを判定する関数
   function isLocationInCircle(location, circle) {
@@ -438,11 +431,12 @@ private val leafletHtml = """
     marker = L.marker([lat, lng], { icon: newIcon }).addTo(map);
     window.marker = marker;
     
-    
-    // 初回のみ地図の中心を移動
-    if (!window.initialLocationSet) {
-      map.setView([lat, lng], 17);
-      window.initialLocationSet = true;
+    // 追尾が有効な場合のみ、地図の中心を現在地にスムーズに移動
+    if (window.isTrackingLocation) {
+      map.panTo([lat, lng], {
+        animate: true,
+        duration: 0.5
+      });
     }
     
     // 位置情報をSharedPreferencesに保存
@@ -1092,8 +1086,6 @@ fun MapTab() {
                         
                         val fabBackground = colorToHex(colorScheme.primary)
                         val fabOnBackground = colorToHex(colorScheme.onPrimary)
-                        // ホバー色はprimaryContainerまたは少し明るくしたprimary
-                        val fabHover = colorToHex(colorScheme.primaryContainer)
                         
                         view.evaluateJavascript(
                             """
@@ -1101,7 +1093,6 @@ fun MapTab() {
                               const root = document.documentElement;
                               root.style.setProperty('--fab-background', '$fabBackground');
                               root.style.setProperty('--fab-on-background', '$fabOnBackground');
-                              root.style.setProperty('--fab-hover', '$fabHover');
                             })();
                             """.trimIndent(),
                             null
@@ -1168,8 +1159,6 @@ fun MapTab() {
             
             val fabBackground = colorToHex(colorScheme.primary)
             val fabOnBackground = colorToHex(colorScheme.onPrimary)
-            // ホバー色はprimaryContainerまたは少し明るくしたprimary
-            val fabHover = colorToHex(colorScheme.primaryContainer)
             
             view.evaluateJavascript(
                 """
@@ -1177,7 +1166,6 @@ fun MapTab() {
                   const root = document.documentElement;
                   root.style.setProperty('--fab-background', '$fabBackground');
                   root.style.setProperty('--fab-on-background', '$fabOnBackground');
-                  root.style.setProperty('--fab-hover', '$fabHover');
                 })();
                 """.trimIndent(),
                 null
@@ -1198,7 +1186,6 @@ fun MapTab() {
                 
                 val fabBackground = colorToHex(colorScheme.primary)
                 val fabOnBackground = colorToHex(colorScheme.onPrimary)
-                val fabHover = colorToHex(colorScheme.primaryContainer)
                 
                 view.evaluateJavascript(
                     """
@@ -1206,7 +1193,6 @@ fun MapTab() {
                       const root = document.documentElement;
                       root.style.setProperty('--fab-background', '$fabBackground');
                       root.style.setProperty('--fab-on-background', '$fabOnBackground');
-                      root.style.setProperty('--fab-hover', '$fabHover');
                     })();
                     """.trimIndent(),
                     null
@@ -1219,11 +1205,17 @@ fun MapTab() {
             onClick = {
                 webView?.evaluateJavascript(
                     """
-                    if (window.map && typeof window.map.setView === 'function' && window.marker && typeof window.marker.getLatLng === 'function') {
+                    if (window.map && typeof window.map.panTo === 'function' && window.marker && typeof window.marker.getLatLng === 'function') {
                       // マーカーの位置を取得（現在地）
                       const markerLatLng = window.marker.getLatLng();
                       if (markerLatLng) {
-                        window.map.setView([markerLatLng.lat, markerLatLng.lng], 17);
+                        // 追尾を再開
+                        window.isTrackingLocation = true;
+                        // スムーズに現在地に移動
+                        window.map.panTo([markerLatLng.lat, markerLatLng.lng], {
+                          animate: true,
+                          duration: 0.5
+                        });
                       } else {
                         // マーカーの位置が取得できない場合は、位置情報を再取得
                         if (typeof window.map.locate === 'function') {
