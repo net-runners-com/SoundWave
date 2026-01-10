@@ -6,6 +6,9 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -43,6 +46,22 @@ class MusicPlayerService : Service() {
     private var exoPlayer: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
     private val binder = MusicBinder()
+    private var audioManager: AudioManager? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                // 他アプリがオーディオを再生した場合、設定に応じて停止
+                if (com.example.soundwave.ui.settings.AppSettingsManager.isStopOnOtherAppEnabled(this)) {
+                    pause()
+                }
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                // オーディオフォーカスを再取得した場合
+            }
+        }
+    }
     
     private var currentSongId: Long? = null
     private var repeatMode: RepeatMode = RepeatMode.NONE
@@ -75,9 +94,52 @@ class MusicPlayerService : Service() {
     
     override fun onCreate() {
         super.onCreate()
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         createNotificationChannel()
         initializePlayer()
         initializeMediaSession()
+        setupAudioFocus()
+    }
+    
+    private fun setupAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
+            
+            audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(audioAttributes)
+                .setAcceptsDelayedFocusGain(true)
+                .setOnAudioFocusChangeListener(audioFocusChangeListener)
+                .build()
+        }
+    }
+    
+    private fun requestAudioFocus(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let {
+                audioManager?.requestAudioFocus(it) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+            } ?: false
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager?.requestAudioFocus(
+                audioFocusChangeListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        }
+    }
+    
+    private fun abandonAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let {
+                audioManager?.abandonAudioFocusRequest(it)
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager?.abandonAudioFocus(audioFocusChangeListener)
+        }
     }
     
     override fun onBind(intent: Intent?): IBinder {
@@ -187,9 +249,14 @@ class MusicPlayerService : Service() {
                                         .build()
                                 )
                                 .build()
-                            player.setMediaItem(mediaItem)
-                            player.prepare()
-                            player.play()
+                            // オーディオフォーカスをリクエスト
+                            if (requestAudioFocus()) {
+                                player.setMediaItem(mediaItem)
+                                player.prepare()
+                                player.play()
+                            } else {
+                                android.util.Log.w("MusicPlayerService", "Failed to gain audio focus")
+                            }
                             
                             // PlayerManagerの状態を更新
                             try {
@@ -212,10 +279,15 @@ class MusicPlayerService : Service() {
                             updateWidget()
                         } ?: run {
                             // 曲情報が取得できない場合はURIのみで再生
-                            val mediaItem = MediaItem.fromUri(uri)
-                            player.setMediaItem(mediaItem)
-                            player.prepare()
-                            player.play()
+                            // オーディオフォーカスをリクエスト
+                            if (requestAudioFocus()) {
+                                val mediaItem = MediaItem.fromUri(uri)
+                                player.setMediaItem(mediaItem)
+                                player.prepare()
+                                player.play()
+                            } else {
+                                android.util.Log.w("MusicPlayerService", "Failed to gain audio focus")
+                            }
                             
                             // PlayerManagerの状態を更新
                             try {
@@ -240,10 +312,15 @@ class MusicPlayerService : Service() {
                     } catch (e: Exception) {
                         android.util.Log.e("MusicPlayerService", "Error getting song info", e)
                         // エラー時はURIのみで再生
-                        val mediaItem = MediaItem.fromUri(uri)
-                        player.setMediaItem(mediaItem)
-                        player.prepare()
-                        player.play()
+                        // オーディオフォーカスをリクエスト
+                        if (requestAudioFocus()) {
+                            val mediaItem = MediaItem.fromUri(uri)
+                            player.setMediaItem(mediaItem)
+                            player.prepare()
+                            player.play()
+                        } else {
+                            android.util.Log.w("MusicPlayerService", "Failed to gain audio focus")
+                        }
                         
                         // PlayerManagerの状態を更新
                         try {
@@ -789,6 +866,7 @@ class MusicPlayerService : Service() {
     
     override fun onDestroy() {
         super.onDestroy()
+        abandonAudioFocus()
         mediaSession?.release()
         mediaSession = null
         audioEffectManager.release()

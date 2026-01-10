@@ -29,6 +29,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onThemeChanged: (AppTheme) -> Unit = {},
     onWidgetSettingsClick: () -> Unit = {},
+    onVersionHistoryClick: () -> Unit = {},
     viewModel: HomeViewModel = viewModel(
         factory = HomeViewModelFactory(LocalContext.current.applicationContext as android.app.Application)
     )
@@ -42,6 +43,13 @@ fun SettingsScreen(
     val isScanning by viewModel.isScanning.collectAsState()
     val themeManager = remember { ThemeManager(context) }
     var selectedTheme by remember { mutableStateOf(themeManager.getSelectedTheme()) }
+    
+    var backgroundPlaybackEnabled by remember { 
+        mutableStateOf(AppSettingsManager.isBackgroundPlaybackEnabled(context)) 
+    }
+    var stopOnOtherAppEnabled by remember { 
+        mutableStateOf(AppSettingsManager.isStopOnOtherAppEnabled(context)) 
+    }
     
     Scaffold(
         topBar = {
@@ -163,6 +171,75 @@ fun SettingsScreen(
                 }
             }
             
+            // 詳細設定
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "詳細",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+            
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "バックグラウンド再生を許可",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                            Switch(
+                                checked = backgroundPlaybackEnabled,
+                                onCheckedChange = {
+                                    backgroundPlaybackEnabled = it
+                                    AppSettingsManager.setBackgroundPlaybackEnabled(context, it)
+                                }
+                            )
+                        }
+                        
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "他アプリでオーディオ再生",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Text(
+                                    text = "他アプリで再生した場合、SoundWaveの音楽を停止",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = stopOnOtherAppEnabled,
+                                onCheckedChange = {
+                                    stopOnOtherAppEnabled = it
+                                    AppSettingsManager.setStopOnOtherAppEnabled(context, it)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            
             // アプリ情報
             item {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -185,7 +262,8 @@ fun SettingsScreen(
                         SettingsItem(
                             icon = Icons.Default.Info,
                             title = "バージョン",
-                            subtitle = "$versionName ($versionCode)"
+                            subtitle = "$versionName ($versionCode)",
+                            onClick = onVersionHistoryClick
                         )
                         
                         Divider(modifier = Modifier.padding(vertical = 8.dp))
@@ -194,79 +272,6 @@ fun SettingsScreen(
                             icon = Icons.Default.Apps,
                             title = "アプリ名",
                             subtitle = "SoundWave"
-                        )
-                    }
-                }
-            }
-            
-            // ウィジェット設定
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "ウィジェット",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            }
-            
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
-                    ) {
-                        SettingsItem(
-                            icon = Icons.Default.Widgets,
-                            title = "ウィジェット設定",
-                            subtitle = "ウィジェットの外観と動作をカスタマイズ",
-                            onClick = onWidgetSettingsClick
-                        )
-                    }
-                }
-            }
-            
-            // その他の設定
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "その他",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            }
-            
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
-                    ) {
-                        SettingsItem(
-                            icon = Icons.Default.Help,
-                            title = "ヘルプ",
-                            subtitle = "使い方やFAQ"
-                        )
-                        
-                        Divider(modifier = Modifier.padding(vertical = 8.dp))
-                        
-                        SettingsItem(
-                            icon = Icons.Default.PrivacyTip,
-                            title = "プライバシーポリシー",
-                            subtitle = "プライバシーに関する情報"
-                        )
-                        
-                        Divider(modifier = Modifier.padding(vertical = 8.dp))
-                        
-                        SettingsItem(
-                            icon = Icons.Default.Description,
-                            title = "利用規約",
-                            subtitle = "利用規約を確認"
                         )
                     }
                 }

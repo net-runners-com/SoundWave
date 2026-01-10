@@ -15,6 +15,8 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -47,7 +49,9 @@ fun SongsTab(
     onSelectedSongsChanged: (Set<Long>) -> Unit = {},
     onShowPlaylistOptions: () -> Unit = {},
     externalClearSelection: Boolean = false,
-    onSongDetail: (Long) -> Unit = {}
+    onSongDetail: (Long) -> Unit = {},
+    onAlbumSelected: (String) -> Unit = {},
+    onArtistSelected: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val playlistRepository = remember { AppDatabaseModule.getPlaylistRepository(context) }
@@ -283,6 +287,30 @@ fun SongsTab(
                                     expanded = showMenu,
                                     onDismissRequest = { showMenu = false }
                                 ) {
+                                    if (song.album.isNotEmpty()) {
+                                        DropdownMenuItem(
+                                            text = { Text("アルバムへ") },
+                                            onClick = {
+                                                showMenu = false
+                                                onAlbumSelected(song.album)
+                                            },
+                                            leadingIcon = {
+                                                Icon(Icons.Default.Album, contentDescription = null)
+                                            }
+                                        )
+                                    }
+                                    if (song.artist.isNotEmpty()) {
+                                        DropdownMenuItem(
+                                            text = { Text("アーティストへ") },
+                                            onClick = {
+                                                showMenu = false
+                                                onArtistSelected(song.artist)
+                                            },
+                                            leadingIcon = {
+                                                Icon(Icons.Default.Person, contentDescription = null)
+                                            }
+                                        )
+                                    }
                                     DropdownMenuItem(
                                         text = { Text("詳細") },
                                         onClick = {

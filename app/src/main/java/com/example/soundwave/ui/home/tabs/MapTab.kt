@@ -579,7 +579,7 @@ private val leafletHtml = """
       }
     }
   };
-  
+ 
   // サイドバータブのクリックイベント
   const sidebarTab = document.querySelector('#sidebar .leaflet-sidebar-tabs > ul > li > a');
   if (sidebarTab) {

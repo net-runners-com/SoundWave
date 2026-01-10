@@ -22,8 +22,8 @@ import com.example.soundwave.ui.playlist.PlaylistDetailScreen
 import com.example.soundwave.ui.home.HomeScreen
 import com.example.soundwave.ui.player.PlayerScreen
 import com.example.soundwave.ui.settings.SettingsScreen
+import com.example.soundwave.ui.settings.VersionHistoryScreen
 import com.example.soundwave.ui.settings.WidgetSettingsScreen
-import com.example.soundwave.ui.song.SongDetailScreen
 import com.example.soundwave.ui.theme.AppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,9 +35,9 @@ import java.net.URLEncoder
 // ナビゲーションルート定義
 object SoundWaveRoutes {
     const val HOME = "home"
-    const val SONG_DETAIL = "song_detail/{songId}"
     const val SETTINGS = "settings"
     const val WIDGET_SETTINGS = "widget_settings"
+    const val VERSION_HISTORY = "version_history"
     const val PLAYER = "player/{songId}"
     const val ALBUM = "album/{albumName}"
     const val ARTIST = "artist/{artistName}"
@@ -45,7 +45,6 @@ object SoundWaveRoutes {
     const val PLAYLIST = "playlist/{playlistId}"
     
     // ヘルパー関数
-    fun songDetail(songId: Long) = "song_detail/$songId"
     fun player(songId: Long) = "player/$songId"
     fun album(albumName: String) = "album/${encodeParam(albumName)}"
     fun artist(artistName: String) = "artist/${encodeParam(artistName)}"
@@ -148,19 +147,8 @@ fun SoundWaveNavigation(
                         navController.navigate(SoundWaveRoutes.SETTINGS)
                     },
                     onSongDetail = { songId -> 
-                        navController.navigate(SoundWaveRoutes.songDetail(songId))
+                        // ボトムシートで表示するため、ナビゲーションは不要
                     }
-                )
-            }
-            
-            composable(
-                route = SoundWaveRoutes.SONG_DETAIL,
-                arguments = listOf(navArgument("songId") { type = NavType.LongType })
-            ) { backStackEntry ->
-                val songId = backStackEntry.arguments?.getLong("songId") ?: return@composable
-                SongDetailScreen(
-                    songId = songId,
-                    onBack = { navController.popBackStack() }
                 )
             }
             
@@ -170,12 +158,21 @@ fun SoundWaveNavigation(
                     onThemeChanged = onThemeChanged,
                     onWidgetSettingsClick = { 
                         navController.navigate(SoundWaveRoutes.WIDGET_SETTINGS)
+                    },
+                    onVersionHistoryClick = {
+                        navController.navigate(SoundWaveRoutes.VERSION_HISTORY)
                     }
                 )
             }
             
             composable(SoundWaveRoutes.WIDGET_SETTINGS) {
                 WidgetSettingsScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            
+            composable(SoundWaveRoutes.VERSION_HISTORY) {
+                VersionHistoryScreen(
                     onBack = { navController.popBackStack() }
                 )
             }
@@ -215,7 +212,7 @@ fun SoundWaveNavigation(
                         navController.navigate(SoundWaveRoutes.playlist(playlistId))
                     },
                     onSongDetail = { songId -> 
-                        navController.navigate(SoundWaveRoutes.songDetail(songId))
+                        // ボトムシートで表示するため、ナビゲーションは不要
                     }
                 )
             }

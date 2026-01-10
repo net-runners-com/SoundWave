@@ -12,8 +12,10 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -57,6 +59,9 @@ fun HomeScreen(
     // ボトムシートの状態
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showBottomSheet by remember { mutableStateOf(false) }
+    val songDetailBottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showSongDetailBottomSheet by remember { mutableStateOf(false) }
+    var selectedSongIdForDetail by remember { mutableStateOf<Long?>(null) }
     
     // 選択モードの状態
     var isSelectionMode by remember { mutableStateOf(false) }
@@ -66,12 +71,12 @@ fun HomeScreen(
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
     var clearSelectionTrigger by remember { mutableStateOf(false) }
     
-    // Mapタブの時はスワイプを無効化
+    // Mapタブの時は、ドロワーが開いている時だけスワイプを有効化
     val isMapTab = TabItem.values().getOrNull(selectedTabIndex) == TabItem.MAP
     
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = !isMapTab, // Mapタブの時はスワイプを無効化
+        gesturesEnabled = if (isMapTab) drawerState.isOpen else true, // Mapタブの時はドロワーが開いている時だけスワイプを有効化
         drawerContent = {
             ModalDrawerSheet(
                 modifier = Modifier.width(240.dp)
@@ -319,7 +324,12 @@ fun HomeScreen(
                         onSelectedSongsChanged = { selectedSongs = it },
                         onShowPlaylistOptions = { showPlaylistOptionsFromHeader = true },
                         externalClearSelection = clearSelectionTrigger,
-                        onSongDetail = onSongDetail
+                        onSongDetail = { songId ->
+                            selectedSongIdForDetail = songId
+                            showSongDetailBottomSheet = true
+                        },
+                        onAlbumSelected = onAlbumSelected,
+                        onArtistSelected = onArtistSelected
                     )
                     TabItem.ALBUMS -> AlbumsTab(
                         viewModel = viewModel,
@@ -360,6 +370,32 @@ fun HomeScreen(
                         }.invokeOnCompletion {
                             if (!bottomSheetState.isVisible) {
                                 showBottomSheet = false
+                            }
+                        }
+                    }
+                )
+            }
+        }
+        
+        // 曲詳細ボトムシート
+        if (showSongDetailBottomSheet && selectedSongIdForDetail != null) {
+            ModalBottomSheet(
+                onDismissRequest = { 
+                    showSongDetailBottomSheet = false
+                    selectedSongIdForDetail = null
+                },
+                sheetState = songDetailBottomSheetState,
+                modifier = Modifier.fillMaxHeight(0.5f)
+            ) {
+                com.example.soundwave.ui.song.SongDetailBottomSheet(
+                    songId = selectedSongIdForDetail!!,
+                    onDismiss = {
+                        scope.launch {
+                            songDetailBottomSheetState.hide()
+                        }.invokeOnCompletion {
+                            if (!songDetailBottomSheetState.isVisible) {
+                                showSongDetailBottomSheet = false
+                                selectedSongIdForDetail = null
                             }
                         }
                     }
