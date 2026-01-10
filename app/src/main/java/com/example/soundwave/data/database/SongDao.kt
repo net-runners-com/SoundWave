@@ -6,11 +6,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SongDao {
-    @Query("SELECT * FROM songs ORDER BY title ASC")
+    @Query("SELECT * FROM songs ORDER BY fileLastModified DESC, dateAdded DESC")
     fun getAllSongs(): Flow<List<SongEntity>>
     
     // Paging対応のクエリ
-    @Query("SELECT * FROM songs ORDER BY title ASC")
+    @Query("SELECT * FROM songs ORDER BY fileLastModified DESC, dateAdded DESC")
     fun getAllSongsPaged(): PagingSource<Int, SongEntity>
     
     // 最適化: 最近の曲を取得（LIMIT付き）

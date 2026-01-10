@@ -1,6 +1,8 @@
 package com.example.soundwave.data.repository
 
 import android.content.Context
+import android.os.Build
+import android.os.Environment
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.Dispatchers
@@ -224,16 +226,26 @@ class YouTubeRepository(private val context: Context) {
             android.util.Log.d("YouTubeRepository", "Downloading: $videoUrl")
             
             // ダウンロード先ディレクトリ
-            val externalFilesDir = context.getExternalFilesDir(null)
-            if (externalFilesDir == null) {
-                android.util.Log.e("YouTubeRepository", "External files directory is null")
-                return@withContext null
+            // Android 10+ (API 30+)では、Download/またはDocuments/のみアクセス可能
+            val downloadDir = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10+ではDownloadディレクトリを使用
+                val publicDownloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                File(publicDownloadsDir, "SoundWave")
+            } else {
+                // Android 9以下では従来通り
+                val externalFilesDir = context.getExternalFilesDir(null)
+                if (externalFilesDir == null) {
+                    android.util.Log.e("YouTubeRepository", "External files directory is null")
+                    return@withContext null
+                }
+                File(externalFilesDir, "Downloads")
             }
             
-            val downloadDir = File(externalFilesDir, "Downloads")
             if (!downloadDir.exists()) {
                 downloadDir.mkdirs()
             }
+            
+            android.util.Log.d("YouTubeRepository", "Download directory: ${downloadDir.absolutePath}")
             
             // リクエストを作成
             val request = YoutubeDLRequest(videoUrl)
@@ -265,8 +277,14 @@ class YouTubeRepository(private val context: Context) {
             }
             
             // ダウンロード実行
-            val response = YoutubeDL.getInstance().execute(request) { progress, etaInSeconds ->
+            // 最新版のyoutubedl-androidでは、コールバックに3つのパラメータ（progress, etaInSeconds, outputLine）がある
+            val response = YoutubeDL.getInstance().execute(request) { progress, etaInSeconds, outputLine ->
+                // outputLineはyt-dlpの出力行（ログなど）
                 onProgress(progress, etaInSeconds)
+                // 必要に応じてoutputLineをログに出力
+                if (outputLine != null && outputLine.isNotBlank()) {
+                    android.util.Log.d("YouTubeRepository", "yt-dlp: $outputLine")
+                }
             }
             
             android.util.Log.d("YouTubeRepository", "Download response: ${response.out}")

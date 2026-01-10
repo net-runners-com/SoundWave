@@ -337,7 +337,7 @@ fun HomeScreen(
                         viewModel = viewModel,
                         onPlaylistSelected = onPlaylistSelected
                     )
-                    TabItem.YOUTUBE -> YouTubeTab()
+                    TabItem.YOUTUBE -> YouTubeTab(homeViewModel = viewModel)
                     TabItem.MAP -> MapTab()
                     null -> {}
                 }

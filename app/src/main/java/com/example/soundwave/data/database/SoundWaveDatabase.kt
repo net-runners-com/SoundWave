@@ -11,7 +11,7 @@ import androidx.room.RoomDatabase
         LyricsEntity::class,
         LocationCircleEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class SoundWaveDatabase : RoomDatabase() {

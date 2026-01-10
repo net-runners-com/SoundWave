@@ -120,8 +120,11 @@ private val leafletHtml = """
        --fab-on-background: #381E72;
        --fab-hover: #e9ddff;
      }
+     /* ズームコントロールを非表示 */
+     .leaflet-control-zoom {
+       display: none !important;
+     }
      /* Leafletコントロールボタンのサイズを大きく、FABの色を適用 */
-     .leaflet-control-zoom a,
      .leaflet-pm-toolbar a {
        width: 48px !important;
        height: 48px !important;
@@ -314,7 +317,9 @@ private val leafletHtml = """
   
   
   // 地図を初期化
-  const map = L.map("map").setView([defaultLat, defaultLng], 17);
+  const map = L.map("map", {
+    zoomControl: false
+  }).setView([defaultLat, defaultLng], 17);
   window.map = map;
 
   L.tileLayer(

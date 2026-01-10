@@ -21,6 +21,12 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        
+        // yt-dlp-android用のABIフィルター
+        // ドキュメントに従って指定されたABIのみをサポート
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+        }
     }
 
     buildTypes {
@@ -121,9 +127,11 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.0.1")
     
     // YouTube Download (yt-dlp wrapper)
-    // Note: yausername/dvdはJitPackから取得可能
-    implementation("com.github.yausername.youtubedl-android:library:0.13.0")
-    implementation("com.github.yausername.youtubedl-android:ffmpeg:0.13.0")
+    // yausername/youtubedl-android - yt-dlpをサポートした最新版
+    // Maven Centralから取得（yt-dlp実行可能ファイルとPython 3.8がバンドルされている）
+    val youtubedlAndroidVersion = "0.18.1"
+    implementation("io.github.junkfood02.youtubedl-android:library:$youtubedlAndroidVersion")
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:$youtubedlAndroidVersion")
     
     // SoundTouch (音程・ピッチ変更)
     // Note: Android用のSoundTouchライブラリが必要

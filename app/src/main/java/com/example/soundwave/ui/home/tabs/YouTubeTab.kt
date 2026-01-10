@@ -6,7 +6,10 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.media.MediaScannerConnection
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,6 +31,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.soundwave.data.AppDatabaseModule
+import com.example.soundwave.data.repository.MusicRepository
 import com.example.soundwave.data.repository.YouTubeRepository
 import com.example.soundwave.data.repository.YouTubeVideo
 import com.example.soundwave.ui.components.EmptyState
@@ -41,7 +46,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import java.io.File
 
 @Composable
-fun YouTubeTab() {
+fun YouTubeTab(
+    homeViewModel: com.example.soundwave.ui.home.HomeViewModel? = null
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -54,6 +61,7 @@ fun YouTubeTab() {
         }
     )
     val repository = remember { YouTubeRepository(context) }
+    val musicRepository = remember { AppDatabaseModule.getMusicRepository(context) }
     
     var searchQuery by remember { mutableStateOf("") }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -61,6 +69,10 @@ fun YouTubeTab() {
     val searchHistory by viewModel.searchHistory.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    
+    // ダウンロード進捗状態を管理（videoId -> 進捗パーセンテージ）
+    val downloadProgress = remember { mutableStateMapOf<String, Float>() }
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
     
     // YouTube動画を開く
     fun openYouTubeVideo(video: YouTubeVideo) {
@@ -164,12 +176,15 @@ fun YouTubeTab() {
                         YouTubeVideoItem(
                             video = video,
                             repository = repository,
+                            downloadProgress = downloadProgress[video.id],
                             onClick = { openYouTubeVideo(video) },
                             onCopyLink = { copyLink(it) },
                             onOpenYouTube = { openYouTubeVideo(video) },
                             onDownload = { format, quality ->
                                 scope.launch {
                                     try {
+                                        // ダウンロード開始
+                                        downloadProgress[video.id] = 0f
                                         snackbarHostState.showSnackbar("ダウンロード開始中...")
                                         val filePath = withContext(Dispatchers.IO) {
                                             repository.downloadVideo(
@@ -177,18 +192,51 @@ fun YouTubeTab() {
                                                 format = format.name,
                                                 quality = quality.name,
                                                 onProgress = { progress, eta ->
-                                                    // 進捗更新（必要に応じて）
+                                                    // UIスレッドで進捗を更新
+                                                    mainHandler.post {
+                                                        downloadProgress[video.id] = progress
+                                                    }
                                                     android.util.Log.d("YouTubeDownload", "Progress: $progress%, ETA: $eta seconds")
                                                 }
                                             )
                                         }
+                                        // ダウンロード完了または失敗時に進捗をクリア
+                                        downloadProgress.remove(video.id)
                                         if (filePath != null) {
                                             val fileName = File(filePath).name
+                                            // メディアスキャンにファイルを登録
+                                            MediaScannerConnection.scanFile(
+                                                context,
+                                                arrayOf(filePath),
+                                                null
+                                            ) { path, uri ->
+                                                android.util.Log.d("YouTubeTab", "Media scan completed: $path -> $uri")
+                                                // メディアスキャン完了後に少し待ってから音楽ファイルを再スキャン
+                                                scope.launch(Dispatchers.IO) {
+                                                    // メディアスキャンが完全に完了するまで少し待つ
+                                                    kotlinx.coroutines.delay(2000)
+                                                    // HomeViewModelがあればそれを使用、なければ直接Repositoryを使用
+                                                    if (homeViewModel != null) {
+                                                        withContext(Dispatchers.Main) {
+                                                            homeViewModel.scanMusicFiles()
+                                                        }
+                                                        android.util.Log.d("YouTubeTab", "Music files rescanned via HomeViewModel")
+                                                    } else {
+                                                        musicRepository.scanMusicFiles()
+                                                        android.util.Log.d("YouTubeTab", "Music files rescanned directly")
+                                                    }
+                                                    // UIスレッドで完了メッセージを表示
+                                                    withContext(Dispatchers.Main) {
+                                                        snackbarHostState.showSnackbar("音楽ファイルを再スキャンしました")
+                                                    }
+                                                }
+                                            }
                                             snackbarHostState.showSnackbar("ダウンロード完了: $fileName")
                                         } else {
                                             snackbarHostState.showSnackbar("ダウンロードに失敗しました。YoutubeDLの初期化に失敗している可能性があります。")
                                         }
                                     } catch (e: com.yausername.youtubedl_android.YoutubeDLException) {
+                                        downloadProgress.remove(video.id)
                                         android.util.Log.e("YouTubeTab", "YoutubeDL error", e)
                                         val errorMsg = when {
                                             e.message?.contains("failed to initialize") == true -> 
@@ -199,6 +247,7 @@ fun YouTubeTab() {
                                         }
                                         snackbarHostState.showSnackbar(errorMsg)
                                     } catch (e: Exception) {
+                                        downloadProgress.remove(video.id)
                                         android.util.Log.e("YouTubeTab", "Download error", e)
                                         snackbarHostState.showSnackbar("エラー: ${e.message ?: "不明なエラー"}")
                                     }
@@ -308,6 +357,7 @@ fun SearchHistoryItem(
 fun YouTubeVideoItem(
     video: YouTubeVideo,
     repository: YouTubeRepository,
+    downloadProgress: Float? = null,
     onClick: () -> Unit,
     onCopyLink: (String) -> Unit,
     onOpenYouTube: () -> Unit,
@@ -372,6 +422,24 @@ fun YouTubeVideoItem(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                // ダウンロード進捗バー
+                downloadProgress?.let { progress ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Column {
+                        LinearProgressIndicator(
+                            progress = progress / 100f,
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "ダウンロード中: ${progress.toInt()}%",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
             

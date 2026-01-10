@@ -48,6 +48,13 @@ object AppDatabaseModule {
         }
     }
     
+    private val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            // songsテーブルにfileLastModifiedカラムを追加
+            database.execSQL("ALTER TABLE songs ADD COLUMN fileLastModified INTEGER")
+        }
+    }
+    
     fun getDatabase(context: Context): SoundWaveDatabase {
         if (database == null) {
             database = Room.databaseBuilder(
@@ -55,7 +62,7 @@ object AppDatabaseModule {
                 SoundWaveDatabase::class.java,
                 "soundwave_database"
             )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
         }
         return database!!

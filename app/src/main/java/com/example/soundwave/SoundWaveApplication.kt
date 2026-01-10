@@ -10,6 +10,8 @@ import com.example.soundwave.data.AppDatabaseModule
 import com.example.soundwave.data.repository.MusicRepository
 import com.example.soundwave.service.LocationMonitoringService
 import com.yausername.youtubedl_android.YoutubeDL
+import com.yausername.youtubedl_android.YoutubeDLException
+import com.yausername.ffmpeg.FFmpeg
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,14 +40,15 @@ class SoundWaveApplication : Application() {
             }
         }
         
-        // YouTubeDLの初期化（バックグラウンドで実行）
+        // YouTubeDLとFFmpegの初期化（バックグラウンドで実行）
+        // FFmpegは音声抽出（--extract-audio）などの機能に必要
         applicationScope.launch(Dispatchers.IO) {
             try {
                 YoutubeDL.getInstance().init(this@SoundWaveApplication)
-                android.util.Log.d("SoundWaveApplication", "YoutubeDL initialized successfully")
-            } catch (e: Exception) {
-                android.util.Log.e("SoundWaveApplication", "Failed to initialize YoutubeDL", e)
-                // 初期化失敗は後で再試行可能
+                FFmpeg.getInstance().init(this@SoundWaveApplication)
+                android.util.Log.d("SoundWaveApplication", "YoutubeDL and FFmpeg initialized successfully")
+            } catch (e: YoutubeDLException) {
+                android.util.Log.e("SoundWaveApplication", "failed to initialize youtubedl-android", e)
             }
         }
         

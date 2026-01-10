@@ -134,7 +134,15 @@ class MusicRepository(
                 )
                 val albumArtPath = albumArtUri.toString()
                 
-                if (File(filePath).exists()) {
+                val file = File(filePath)
+                if (file.exists()) {
+                    // ファイルの最終更新時刻を取得
+                    val fileLastModified = try {
+                        file.lastModified()
+                    } catch (e: Exception) {
+                        null
+                    }
+                    
                     songs.add(
                         SongEntity(
                             id = id,
@@ -148,6 +156,7 @@ class MusicRepository(
                             trackNumber = track,
                             year = year,
                             dateAdded = dateAdded,
+                            fileLastModified = fileLastModified,
                             playCount = 0,
                             lastPlayed = null
                         )

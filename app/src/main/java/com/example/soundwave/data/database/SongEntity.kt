@@ -17,6 +17,7 @@ data class SongEntity(
     val trackNumber: Int?,
     val year: Int?,
     val dateAdded: Long, // timestamp
+    val fileLastModified: Long? = null, // ファイルの最終更新時刻（ミリ秒）
     val playCount: Int = 0,
     val lastPlayed: Long? = null
 )
