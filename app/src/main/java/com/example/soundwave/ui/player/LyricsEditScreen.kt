@@ -2,6 +2,8 @@ package com.example.soundwave.ui.player
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -154,7 +156,7 @@ fun LyricsEditScreen(
             ) {
                 itemsIndexed(
                     items = editableLines,
-                    key = { index, line -> "${index}_${line.time}_${line.text.hashCode()}" }
+                    key = { index, _ -> index }
                 ) { index, line ->
                     val endTime = if (index < editableLines.size - 1) {
                         editableLines[index + 1].time
@@ -265,12 +267,29 @@ private fun EditableLyricLineRow(
         )
         
         // Subtitle列（歌詞テキスト）
+        // テキストフィールドの状態をローカルで管理して、キーパッドが閉じないようにする
+        val interactionSource = remember { MutableInteractionSource() }
+        val isFocused by interactionSource.collectIsFocusedAsState()
+        var textValue by remember(index) { mutableStateOf(line.text) }
+        
+        // line.textが外部から変更された場合（削除や追加など）に同期
+        // ただし、ユーザーが編集中（フォーカス中）の場合は更新しない
+        LaunchedEffect(line.text, isFocused) {
+            if (!isFocused && textValue != line.text) {
+                textValue = line.text
+            }
+        }
+        
         OutlinedTextField(
-            value = line.text,
-            onValueChange = onTextChange,
+            value = textValue,
+            onValueChange = { newValue ->
+                textValue = newValue
+                onTextChange(newValue)
+            },
             modifier = Modifier.weight(0.5f),
             placeholder = { Text(stringResource(R.string.lyrics_edit_lyrics_hint)) },
             singleLine = true,
+            interactionSource = interactionSource,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = MaterialTheme.colorScheme.outline

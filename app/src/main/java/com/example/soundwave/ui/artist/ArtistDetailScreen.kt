@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
 import coil.compose.AsyncImage
@@ -107,7 +108,11 @@ fun ArtistDetailScreen(
                     if (isSelectionMode) {
                         Text("選択中")
                     } else {
-                        Text(artistName)
+                        Text(
+                            text = artistName,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 },
                 navigationIcon = {
