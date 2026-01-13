@@ -2,10 +2,12 @@ package com.example.soundwave.ui.player
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -23,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.example.soundwave.R
 import com.example.soundwave.data.database.LyricsEntity
+import com.example.soundwave.data.repository.LRCLicSearchResult
 import com.example.soundwave.data.repository.LyricLine
 
 /**
@@ -33,9 +36,18 @@ import com.example.soundwave.data.repository.LyricLine
 fun LyricsEditScreen(
     lyrics: LyricsEntity,
     lyricLines: List<LyricLine>,
+    songTitle: String = "",
     onBack: () -> Unit,
-    onSave: (String, String?) -> Unit
+    onSave: (String, String?) -> Unit,
+    onRefreshLyrics: ((String) -> Unit)? = null,
+    onSelectLyrics: ((String) -> Unit)? = null,
+    searchResults: List<LRCLicSearchResult> = emptyList(),
+    isSearching: Boolean = false,
+    isFetchingLyrics: Boolean = false
 ) {
+    // 検索ダイアログの表示状態
+    var showSearchDialog by remember { mutableStateOf(false) }
+    
     // LRC形式の歌詞行を編集可能な状態に変換
     var editableLines by remember {
         mutableStateOf(
@@ -48,6 +60,17 @@ fun LyricsEditScreen(
                 }
             }
         )
+    }
+    
+    // 歌詞が再取得された場合、編集可能な行を更新
+    LaunchedEffect(lyrics, lyricLines) {
+        editableLines = if (lyricLines.isNotEmpty()) {
+            lyricLines.map { EditableLyricLine(it.time, it.text) }
+        } else {
+            lyrics.lyricsText.lines().mapIndexed { index, line ->
+                EditableLyricLine(index * 1000L, line)
+            }
+        }
     }
     
     // LRC形式の文字列を生成
@@ -78,6 +101,15 @@ fun LyricsEditScreen(
                     }
                 },
                 actions = {
+                    // 歌詞を再取得ボタン
+                    if (onRefreshLyrics != null && onSelectLyrics != null) {
+                        TextButton(
+                            onClick = { showSearchDialog = true }
+                        ) {
+                            Text("再取得")
+                        }
+                    }
+                    // 保存ボタン
                     TextButton(
                         onClick = {
                             val lrcString = generateLrcString()
@@ -209,7 +241,206 @@ fun LyricsEditScreen(
                 }
             }
         }
+        
+        // 歌詞検索ダイアログ
+        if (showSearchDialog && onRefreshLyrics != null && onSelectLyrics != null) {
+            LyricsSearchDialog(
+                searchResults = searchResults,
+                isSearching = isSearching,
+                isFetchingLyrics = isFetchingLyrics,
+                initialKeyword = songTitle,
+                onDismiss = { showSearchDialog = false },
+                onSelectLyrics = { lyricsId ->
+                    onSelectLyrics(lyricsId)
+                    showSearchDialog = false
+                },
+                onSearch = { keyword ->
+                    onRefreshLyrics(keyword)
+                }
+            )
+        }
     }
+}
+
+/**
+ * 歌詞検索ダイアログ
+ */
+@Composable
+private fun LyricsSearchDialog(
+    searchResults: List<LRCLicSearchResult>,
+    isSearching: Boolean,
+    isFetchingLyrics: Boolean = false,
+    initialKeyword: String = "",
+    onDismiss: () -> Unit,
+    onSelectLyrics: (String) -> Unit,
+    onSearch: (String) -> Unit
+) {
+    var keyword by remember { mutableStateOf(initialKeyword) }
+    var hasSearched by remember { mutableStateOf(false) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("歌詞を検索")
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 500.dp)
+            ) {
+                // 検索キーワード
+                OutlinedTextField(
+                    value = keyword,
+                    onValueChange = { keyword = it },
+                    label = { 
+                        Text("キーワードで検索")
+                    },
+                    placeholder = {
+                        Text("曲名など")
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 検索ボタン
+                Button(
+                    onClick = {
+                        if (keyword.isNotBlank()) {
+                            hasSearched = true
+                            onSearch(keyword)
+                        }
+                    },
+                    enabled = !isSearching && keyword.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("検索")
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Divider()
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // 歌詞取得中表示
+                if (isFetchingLyrics) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "歌詞を取得中...",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+                
+                // 検索結果
+                if (hasSearched && !isFetchingLyrics) {
+                    if (isSearching) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    } else if (searchResults.isEmpty()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "歌詞が見つかりませんでした",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "検索結果: ${searchResults.size}件",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 300.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(searchResults, key = { it.id }) { result ->
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(enabled = !isFetchingLyrics) { 
+                                            onSelectLyrics(result.id) 
+                                        }
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp)
+                                    ) {
+                                        Text(
+                                            text = result.title,
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = result.artist,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        if (!result.album.isNullOrEmpty()) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = result.album,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("閉じる")
+            }
+        }
+    )
 }
 
 /**

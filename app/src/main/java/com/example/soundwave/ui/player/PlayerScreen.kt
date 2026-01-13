@@ -232,21 +232,21 @@ fun PlayerScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.fillMaxWidth()
                     ) {
+                        // シークバー（通常モードと同じ順序）
+                        SeekBarSection(
+                            currentPosition = currentPosition,
+                            duration = duration,
+                            onSeek = { playerViewModel.seekTo(it.toLong()) }
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
                         // 再生コントロール
                         PlaybackControlsSection(
                             isPlaying = isPlaying,
                             onPlayPause = { playerViewModel.playPause() },
                             onSkipNext = { playerViewModel.skipNext() },
                             onSkipPrevious = { playerViewModel.skipPrevious() }
-                        )
-                        
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
-                        // シークバー
-                        SeekBarSection(
-                            currentPosition = currentPosition,
-                            duration = duration,
-                            onSeek = { playerViewModel.seekTo(it.toLong()) }
                         )
                         
                         Spacer(modifier = Modifier.height(16.dp))

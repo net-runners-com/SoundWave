@@ -38,6 +38,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.soundwave.data.AppDatabaseModule
+import com.example.soundwave.data.repository.LRCLicSearchResult
 import com.example.soundwave.player.PlayerManager
 import com.example.soundwave.ui.permission.PermissionScreen
 import com.example.soundwave.ui.album.AlbumDetailScreen
@@ -58,6 +59,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import java.net.URLDecoder
 import java.net.URLEncoder
+import android.util.Log
 
 // ナビゲーションルート定義
 object SoundWaveRoutes {
@@ -314,10 +316,17 @@ fun SoundWaveNavigation(
                 // 歌詞データを取得
                 var lyrics by remember { mutableStateOf<com.example.soundwave.data.database.LyricsEntity?>(null) }
                 var lyricLines by remember { mutableStateOf<List<com.example.soundwave.data.repository.LyricLine>>(emptyList()) }
+                var song by remember { mutableStateOf<com.example.soundwave.data.database.SongEntity?>(null) }
                 var isLoading by remember { mutableStateOf(true) }
+                
+                // 検索関連の状態
+                var searchResults by remember { mutableStateOf<List<com.example.soundwave.data.repository.LRCLicSearchResult>>(emptyList()) }
+                var isSearching by remember { mutableStateOf(false) }
+                var isFetchingLyrics by remember { mutableStateOf(false) }
                 
                 LaunchedEffect(songId) {
                     kotlinx.coroutines.withContext(Dispatchers.IO) {
+                        song = musicRepository.getSongById(songId)
                         lyrics = lyricsRepository.getLyrics(songId)
                         lyrics?.let { l ->
                             if (!l.lyricsLrc.isNullOrEmpty()) {
@@ -340,6 +349,7 @@ fun SoundWaveNavigation(
                     LyricsEditScreen(
                         lyrics = lyrics!!,
                         lyricLines = lyricLines,
+                        songTitle = song?.title ?: "",
                         onBack = {
                             // PlayerScreenに戻る
                             navController.navigate(SoundWaveRoutes.player(songId)) {
@@ -358,7 +368,45 @@ fun SoundWaveNavigation(
                                     }
                                 }
                             }
-                        }
+                        },
+                        onRefreshLyrics = { keyword ->
+                            coroutineScope.launch(Dispatchers.IO) {
+                                isSearching = true
+                                try {
+                                    searchResults = lyricsRepository.searchLyricsFromLRCLicByKeyword(keyword)
+                                } catch (e: Exception) {
+                                    android.util.Log.e("SoundWaveNavigation", "Error searching lyrics", e)
+                                    searchResults = emptyList()
+                                } finally {
+                                    isSearching = false
+                                }
+                            }
+                        },
+                        onSelectLyrics = { lyricsId ->
+                            coroutineScope.launch(Dispatchers.IO) {
+                                isFetchingLyrics = true
+                                try {
+                                    val success = lyricsRepository.fetchAndSaveLyricsFromLRCLicById(songId, lyricsId)
+                                    if (success) {
+                                        // 歌詞を再読み込み
+                                        lyrics = lyricsRepository.getLyrics(songId)
+                                        lyrics?.let { l ->
+                                            if (!l.lyricsLrc.isNullOrEmpty()) {
+                                                lyricLines = lyricsRepository.parseLrcFile(l.lyricsLrc)
+                                            }
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    android.util.Log.e("SoundWaveNavigation", "Error fetching lyrics", e)
+                                } finally {
+                                    isFetchingLyrics = false
+                                    searchResults = emptyList()
+                                }
+                            }
+                        },
+                        searchResults = searchResults,
+                        isSearching = isSearching,
+                        isFetchingLyrics = isFetchingLyrics
                     )
                 } else {
                     // 歌詞がない場合は戻る
