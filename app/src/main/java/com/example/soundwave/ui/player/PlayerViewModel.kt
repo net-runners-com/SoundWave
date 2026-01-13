@@ -141,15 +141,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     if (success) {
                         loadLyrics(song.id, song.filePath)
                         _lyricsMessage.value = "歌詞を取得しました"
+                        // 歌詞取得成功時は検索結果をクリアしない（ダイアログが閉じられるため）
                     } else {
                         _lyricsMessage.value = "歌詞の取得に失敗しました"
+                        // 失敗時のみ検索結果をクリア
+                        _searchResults.value = emptyList()
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("PlayerViewModel", "Error fetching lyrics", e)
                     _lyricsMessage.value = "エラー: ${e.message ?: "歌詞の取得に失敗しました"}"
+                    // エラー時も検索結果をクリア
+                    _searchResults.value = emptyList()
                 } finally {
                     _isFetchingLyrics.value = false
-                    _searchResults.value = emptyList()
                 }
             }
         }
