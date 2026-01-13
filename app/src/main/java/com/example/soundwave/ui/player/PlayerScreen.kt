@@ -236,7 +236,9 @@ fun PlayerScreen(
                         SeekBarSection(
                             currentPosition = currentPosition,
                             duration = duration,
-                            onSeek = { playerViewModel.seekTo(it.toLong()) }
+                            isPlaying = isPlaying,
+                            onSeek = { playerViewModel.seekTo(it.toLong()) },
+                            onPlayPause = { playerViewModel.playPause() }
                         )
                         
                         Spacer(modifier = Modifier.height(16.dp))
@@ -300,7 +302,9 @@ fun PlayerScreen(
                     SeekBarSection(
                         currentPosition = currentPosition,
                         duration = duration,
-                        onSeek = { playerViewModel.seekTo(it.toLong()) }
+                        isPlaying = isPlaying,
+                        onSeek = { playerViewModel.seekTo(it.toLong()) },
+                        onPlayPause = { playerViewModel.playPause() }
                     )
                     
                     Spacer(modifier = Modifier.height(32.dp))
@@ -624,11 +628,52 @@ private fun SongInfoSection(song: com.example.soundwave.data.database.SongEntity
 private fun SeekBarSection(
     currentPosition: Long,
     duration: Long,
-    onSeek: (Float) -> Unit
+    isPlaying: Boolean,
+    onSeek: (Float) -> Unit,
+    onPlayPause: () -> Unit
 ) {
+    // ドラッグ中の状態を管理
+    var isDragging by remember { mutableStateOf(false) }
+    var sliderValue by remember { mutableStateOf(currentPosition.toFloat()) }
+    // ドラッグ開始前の再生状態を記憶
+    var wasPlayingBeforeDrag by remember { mutableStateOf(false) }
+    
+    // ドラッグ中でない場合のみ、currentPositionからsliderValueを更新
+    LaunchedEffect(currentPosition) {
+        if (!isDragging) {
+            sliderValue = currentPosition.toFloat()
+        }
+    }
+    
+    // durationが変更された場合も更新
+    LaunchedEffect(duration) {
+        sliderValue = currentPosition.toFloat().coerceIn(0f, duration.toFloat().coerceAtLeast(1f))
+    }
+    
+    // 表示用の位置（ドラッグ中はsliderValue、そうでない場合はcurrentPosition）
+    val displayPosition = if (isDragging) sliderValue.toLong() else currentPosition
+    
     Slider(
-        value = currentPosition.toFloat(),
-        onValueChange = onSeek,
+        value = sliderValue,
+        onValueChange = { newValue ->
+            if (!isDragging) {
+                // ドラッグ開始時：再生中なら一時停止
+                wasPlayingBeforeDrag = isPlaying
+                if (isPlaying) {
+                    onPlayPause()
+                }
+                isDragging = true
+            }
+            sliderValue = newValue
+        },
+        onValueChangeFinished = {
+            isDragging = false
+            onSeek(sliderValue)
+            // ドラッグ終了時：元々再生中だった場合は再開
+            if (wasPlayingBeforeDrag) {
+                onPlayPause()
+            }
+        },
         valueRange = 0f..duration.toFloat().coerceAtLeast(1f),
         modifier = Modifier.fillMaxWidth()
     )
@@ -638,7 +683,7 @@ private fun SeekBarSection(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
-            text = TimeFormatter.format(currentPosition),
+            text = TimeFormatter.format(displayPosition),
             style = MaterialTheme.typography.bodySmall
         )
         Text(
