@@ -5,6 +5,7 @@ package com.example.soundwave.ui.player
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -44,7 +45,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun PlayerScreen(
     songId: Long,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onEditLyrics: () -> Unit
 ) {
     val context = LocalContext.current
     val playerManager = remember { PlayerManager.getInstance(context) }
@@ -72,7 +74,10 @@ fun PlayerScreen(
     // 歌詞取得メッセージを表示
     LaunchedEffect(lyricsMessage) {
         lyricsMessage?.let { message ->
-            snackbarHostState.showSnackbar(message)
+            snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = "✕"
+            )
             playerViewModel.clearLyricsMessage()
             // 歌詞取得が成功した場合、検索ダイアログを閉じる
             if (message.contains("取得しました") || message.contains("保存しました")) {
@@ -129,7 +134,15 @@ fun PlayerScreen(
             )
         },
         snackbarHost = {
-            SnackbarHost(hostState = snackbarHostState)
+            SnackbarHost(
+                hostState = snackbarHostState,
+                snackbar = { snackbarData ->
+                    Snackbar(
+                        snackbarData = snackbarData,
+                        actionOnNewLine = false
+                    )
+                }
+            )
         }
     ) { paddingValues ->
         Box(
@@ -239,8 +252,9 @@ fun PlayerScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                         
                         // その他のコントロール
+                        val hasLyrics1 = currentLyrics != null
                         AdditionalControlsSection(
-                            hasLyrics = currentLyrics != null,
+                            hasLyrics = hasLyrics1,
                             showLyrics = showLyrics,
                             repeatMode = repeatMode,
                             onLyricsClick = { 
@@ -252,7 +266,12 @@ fun PlayerScreen(
                             },
                             onShuffleClick = { playerViewModel.toggleShuffle() },
                             onRepeatClick = { playerViewModel.toggleRepeat() },
-                            onEffectClick = { showEffectDialog = true }
+                            onEffectClick = { showEffectDialog = true },
+                            onEditClick = { 
+                                if (currentLyrics != null) {
+                                    onEditLyrics()
+                                }
+                            }
                         )
                     }
                     
@@ -296,9 +315,10 @@ fun PlayerScreen(
                     
                     Spacer(modifier = Modifier.height(32.dp))
                     
-                    // その他のコントロール
+                    // その他のコントロール（上部と同じ内容を再表示）
+                    val hasLyrics2 = currentLyrics != null
                     AdditionalControlsSection(
-                        hasLyrics = currentLyrics != null,
+                        hasLyrics = hasLyrics2,
                         showLyrics = showLyrics,
                         repeatMode = repeatMode,
                         onLyricsClick = { 
@@ -312,7 +332,12 @@ fun PlayerScreen(
                         },
                         onShuffleClick = { playerViewModel.toggleShuffle() },
                         onRepeatClick = { playerViewModel.toggleRepeat() },
-                        onEffectClick = { showEffectDialog = true }
+                        onEffectClick = { showEffectDialog = true },
+                        onEditClick = { 
+                            if (currentLyrics != null) {
+                                onEditLyrics()
+                            }
+                        }
                     )
                 }
             }
@@ -341,6 +366,8 @@ fun PlayerScreen(
                 onDismiss = { showEffectDialog = false }
             )
         }
+        
+        // 歌詞編集画面への遷移は直接onEditClickで処理
     }
 }
 
@@ -540,7 +567,9 @@ private fun AlbumArtSection(song: com.example.soundwave.data.database.SongEntity
 }
 
 @Composable
-private fun LyricsHeaderSection(song: com.example.soundwave.data.database.SongEntity?) {
+private fun LyricsHeaderSection(
+    song: com.example.soundwave.data.database.SongEntity?
+) {
     song?.let {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -831,7 +860,8 @@ private fun AdditionalControlsSection(
     onLyricsClick: () -> Unit = {},
     onShuffleClick: () -> Unit = {},
     onRepeatClick: () -> Unit = {},
-    onEffectClick: () -> Unit = {}
+    onEffectClick: () -> Unit = {},
+    onEditClick: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -877,6 +907,20 @@ private fun AdditionalControlsSection(
                     MaterialTheme.colorScheme.onSurface
                 }
             )
+        }
+        // 編集ボタン（歌詞がある場合のみ表示）
+        if (hasLyrics) {
+            IconButton(
+                onClick = onEditClick,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = "編集",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
         IconButton(onClick = onEffectClick) {
             Icon(Icons.Default.GraphicEq, contentDescription = "エフェクト")

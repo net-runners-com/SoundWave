@@ -52,7 +52,8 @@ fun PlaylistDetailScreen(
     onArtistSelected: (String) -> Unit = {},
     onFolderSelected: (String) -> Unit = {},
     onPlaylistSelected: (Long) -> Unit = {},
-    onSongDetail: (Long) -> Unit = {}
+    onSongDetail: (Long) -> Unit = {},
+    onEditLyrics: (Long) -> Unit = {}
 ) {
     val context = LocalContext.current
     val playlistRepository = remember { AppDatabaseModule.getPlaylistRepository(context) }
@@ -218,7 +219,7 @@ fun PlaylistDetailScreen(
                                 ) {
                                     Icon(
                                         imageVector = tabItem.icon,
-                                        contentDescription = tabItem.title,
+                                        contentDescription = tabItem.getTitle(LocalContext.current),
                                         modifier = Modifier
                                             .size(32.dp)
                                             .padding(top = 8.dp),
@@ -400,6 +401,9 @@ fun PlaylistDetailScreen(
                             showBottomSheet = false
                         }
                     }
+                },
+                onEditLyrics = {
+                    onEditLyrics(currentSongId!!)
                 }
             )
         }

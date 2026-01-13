@@ -133,6 +133,12 @@ class PlayerManager private constructor(
         _isPlaying.value = false
     }
     
+    fun stop() {
+        service?.stop()
+        _isPlaying.value = false
+        _currentSongId.value = null
+    }
+    
     fun resume() {
         service?.resume()
         _isPlaying.value = true

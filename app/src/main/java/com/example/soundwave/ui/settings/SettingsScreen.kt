@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import android.app.Activity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.soundwave.ui.home.HomeViewModel
@@ -28,7 +29,7 @@ import com.example.soundwave.ui.settings.WidgetSettingsScreen
 fun SettingsScreen(
     onBack: () -> Unit,
     onThemeChanged: (AppTheme) -> Unit = {},
-    onWidgetSettingsClick: () -> Unit = {},
+    onWidgetSettingsClick: () -> Unit = {}, // Reserved for future use
     onVersionHistoryClick: () -> Unit = {},
     viewModel: HomeViewModel = viewModel(
         factory = HomeViewModelFactory(LocalContext.current.applicationContext as android.app.Application)
@@ -54,12 +55,12 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("設定") },
+                title = { Text(context.getString(com.example.soundwave.R.string.settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             Icons.Default.ArrowBack,
-                            contentDescription = "戻る"
+                            contentDescription = context.getString(com.example.soundwave.R.string.back)
                         )
                     }
                 }
@@ -76,7 +77,7 @@ fun SettingsScreen(
             // テーマ設定
             item {
                 Text(
-                    text = "外観",
+                    text = context.getString(com.example.soundwave.R.string.settings_appearance),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
@@ -92,7 +93,7 @@ fun SettingsScreen(
                             .padding(16.dp)
                     ) {
                         Text(
-                            text = "テーマカラー",
+                            text = context.getString(com.example.soundwave.R.string.settings_theme_color),
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.padding(bottom = 12.dp)
                         )
@@ -142,11 +143,11 @@ fun SettingsScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "音楽ファイルを再スキャン",
+                                    text = context.getString(com.example.soundwave.R.string.settings_rescan_music),
                                     style = MaterialTheme.typography.bodyLarge
                                 )
                                 Text(
-                                    text = "デバイス内の音楽ファイルを再検索します",
+                                    text = context.getString(com.example.soundwave.R.string.settings_rescan_complete),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -161,9 +162,9 @@ fun SettingsScreen(
                                         color = MaterialTheme.colorScheme.onPrimary
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("スキャン中...")
+                                    Text(context.getString(com.example.soundwave.R.string.settings_rescanning))
                                 } else {
-                                    Text("スキャン")
+                                    Text(context.getString(com.example.soundwave.R.string.search))
                                 }
                             }
                         }
@@ -175,12 +176,95 @@ fun SettingsScreen(
             item {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "詳細",
+                    text = context.getString(com.example.soundwave.R.string.settings_details),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
             
+            // 言語設定
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        var selectedLanguage by remember { 
+                            mutableStateOf(LanguageManager.getSelectedLanguage(context))
+                        }
+                        var showLanguageDialog by remember { mutableStateOf(false) }
+                        
+                        SettingsItem(
+                            icon = Icons.Default.Language,
+                            title = context.getString(com.example.soundwave.R.string.settings_language),
+                            subtitle = LanguageManager.getSupportedLanguages()
+                                .find { it.code == selectedLanguage }?.nativeName
+                                ?: context.getString(com.example.soundwave.R.string.language_japanese),
+                            onClick = { showLanguageDialog = true }
+                        )
+                        
+                        if (showLanguageDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showLanguageDialog = false },
+                                title = { 
+                                    Text(context.getString(com.example.soundwave.R.string.settings_language))
+                                },
+                                text = {
+                                    Column {
+                                        LanguageManager.getSupportedLanguages().forEach { language ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        selectedLanguage = language.code
+                                                        LanguageManager.setLanguage(context, language.code)
+                                                        showLanguageDialog = false
+                                                        // Activityを再起動して言語変更を反映
+                                                        (context as? Activity)?.recreate()
+                                                    }
+                                                    .padding(vertical = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = selectedLanguage == language.code,
+                                                    onClick = {
+                                                        selectedLanguage = language.code
+                                                        LanguageManager.setLanguage(context, language.code)
+                                                        showLanguageDialog = false
+                                                        // Activityを再起動して言語変更を反映
+                                                        (context as? Activity)?.recreate()
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = language.nativeName,
+                                                    style = MaterialTheme.typography.bodyLarge
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = " (${language.englishName})",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = { showLanguageDialog = false }) {
+                                        Text(context.getString(com.example.soundwave.R.string.cancel))
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            
+            // 詳細設定（続き）
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth()
@@ -197,7 +281,7 @@ fun SettingsScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "バックグラウンド再生を許可",
+                                    text = context.getString(com.example.soundwave.R.string.settings_allow_background_playback),
                                     style = MaterialTheme.typography.bodyLarge
                                 )
                             }
@@ -219,13 +303,8 @@ fun SettingsScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "他アプリでオーディオ再生",
+                                    text = context.getString(com.example.soundwave.R.string.settings_stop_on_other_app_audio),
                                     style = MaterialTheme.typography.bodyLarge
-                                )
-                                Text(
-                                    text = "他アプリで再生した場合、SoundWaveの音楽を停止",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                             Switch(
@@ -261,7 +340,7 @@ fun SettingsScreen(
                     ) {
                         SettingsItem(
                             icon = Icons.Default.Info,
-                            title = "バージョン",
+                            title = context.getString(com.example.soundwave.R.string.settings_version),
                             subtitle = "$versionName ($versionCode)",
                             onClick = onVersionHistoryClick
                         )
@@ -270,7 +349,7 @@ fun SettingsScreen(
                         
                         SettingsItem(
                             icon = Icons.Default.Apps,
-                            title = "アプリ名",
+                            title = context.getString(com.example.soundwave.R.string.app_name),
                             subtitle = "SoundWave"
                         )
                     }

@@ -47,7 +47,7 @@ fun SongsTab(
     onSongSelected: (Long) -> Unit,
     onSelectionModeChanged: (Boolean) -> Unit = {},
     onSelectedSongsChanged: (Set<Long>) -> Unit = {},
-    onShowPlaylistOptions: () -> Unit = {},
+    onShowPlaylistOptions: () -> Unit = {}, // Reserved for future use
     externalClearSelection: Boolean = false,
     onSongDetail: (Long) -> Unit = {},
     onAlbumSelected: (String) -> Unit = {},
@@ -116,14 +116,14 @@ fun SongsTab(
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            label = { Text("曲を検索") },
+            label = { Text(context.getString(com.example.soundwave.R.string.search)) },
             leadingIcon = {
                 Icon(Icons.Default.Search, contentDescription = null)
             },
             trailingIcon = {
                 if (searchQuery.isNotEmpty()) {
                     IconButton(onClick = { searchQuery = "" }) {
-                        Icon(Icons.Default.Clear, contentDescription = "クリア")
+                        Icon(Icons.Default.Clear, contentDescription = context.getString(com.example.soundwave.R.string.cancel))
                     }
                 }
             },
@@ -289,7 +289,7 @@ fun SongsTab(
                                 ) {
                                     if (song.album.isNotEmpty()) {
                                         DropdownMenuItem(
-                                            text = { Text("アルバムへ") },
+                                            text = { Text(context.getString(com.example.soundwave.R.string.song_go_to_album)) },
                                             onClick = {
                                                 showMenu = false
                                                 onAlbumSelected(song.album)
@@ -301,7 +301,7 @@ fun SongsTab(
                                     }
                                     if (song.artist.isNotEmpty()) {
                                         DropdownMenuItem(
-                                            text = { Text("アーティストへ") },
+                                            text = { Text(context.getString(com.example.soundwave.R.string.song_go_to_artist)) },
                                             onClick = {
                                                 showMenu = false
                                                 onArtistSelected(song.artist)
@@ -312,7 +312,7 @@ fun SongsTab(
                                         )
                                     }
                                     DropdownMenuItem(
-                                        text = { Text("詳細") },
+                                        text = { Text(context.getString(com.example.soundwave.R.string.details)) },
                                         onClick = {
                                             showMenu = false
                                             onSongDetail(song.id)

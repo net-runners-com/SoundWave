@@ -1,5 +1,7 @@
 package com.example.soundwave
 
+import android.content.Context
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,10 +19,18 @@ import com.example.soundwave.ui.navigation.SoundWaveNavigation
 import com.example.soundwave.ui.theme.SoundWaveTheme
 import com.example.soundwave.ui.theme.ThemeManager
 import com.example.soundwave.ui.theme.AppTheme
+import com.example.soundwave.ui.settings.LanguageManager
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        val selectedLanguage = LanguageManager.getSelectedLanguage(newBase)
+        super.attachBaseContext(updateBaseContextLocale(newBase, selectedLanguage))
+    }
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
         enableEdgeToEdge()
         setContent {
             var currentTheme by remember { mutableStateOf(ThemeManager(this).getSelectedTheme()) }
@@ -37,6 +47,30 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+    
+    private fun updateBaseContextLocale(context: Context, languageCode: String): Context {
+        val locale = when (languageCode) {
+            "ja" -> Locale.JAPANESE
+            "en" -> Locale.ENGLISH
+            "ko" -> Locale.KOREAN
+            "zh" -> Locale.SIMPLIFIED_CHINESE
+            else -> Locale.JAPANESE
+        }
+        
+        Locale.setDefault(locale)
+        
+        val config = Configuration(context.resources.configuration)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+            config.setLocale(locale)
+            return context.createConfigurationContext(config)
+        } else {
+            @Suppress("DEPRECATION")
+            config.locale = locale
+            @Suppress("DEPRECATION")
+            context.resources.updateConfiguration(config, context.resources.displayMetrics)
+            return context
         }
     }
 }

@@ -54,7 +54,8 @@ fun AlbumDetailScreen(
     onArtistSelected: (String) -> Unit = {},
     onFolderSelected: (String) -> Unit = {},
     onPlaylistSelected: (Long) -> Unit = {},
-    onSongDetail: (Long) -> Unit = {}
+    onSongDetail: (Long) -> Unit = {},
+    onEditLyrics: (Long) -> Unit = {}
 ) {
     val context = LocalContext.current
     val musicRepository = remember { AppDatabaseModule.getMusicRepository(context) }
@@ -178,7 +179,7 @@ fun AlbumDetailScreen(
                                 ) {
                                     Icon(
                                         imageVector = tabItem.icon,
-                                        contentDescription = tabItem.title,
+                                        contentDescription = tabItem.getTitle(LocalContext.current),
                                         modifier = Modifier
                                             .size(32.dp)
                                             .padding(top = 8.dp),
@@ -376,30 +377,33 @@ fun AlbumDetailScreen(
                 }
             }
         }
-        
-        // ボトムシート（プレーヤー画面）
-        if (showBottomSheet && currentSongId != null) {
-            ModalBottomSheet(
-                onDismissRequest = { showBottomSheet = false },
-                sheetState = bottomSheetState,
-                modifier = Modifier.fillMaxHeight()
-            ) {
-                PlayerScreen(
-                    songId = currentSongId!!,
-                    onBack = {
-                        scope.launch {
-                            bottomSheetState.hide()
-                        }.invokeOnCompletion {
-                            if (!bottomSheetState.isVisible) {
-                                showBottomSheet = false
-                            }
+    } // Scaffoldのcontentラムダ終了
+    
+    // ボトムシート（プレーヤー画面）
+    if (showBottomSheet && currentSongId != null) {
+        ModalBottomSheet(
+            onDismissRequest = { showBottomSheet = false },
+            sheetState = bottomSheetState,
+            modifier = Modifier.fillMaxHeight()
+        ) {
+            PlayerScreen(
+                songId = currentSongId!!,
+                onBack = {
+                    scope.launch {
+                        bottomSheetState.hide()
+                    }.invokeOnCompletion {
+                        if (!bottomSheetState.isVisible) {
+                            showBottomSheet = false
                         }
                     }
-                )
-            }
+                },
+                onEditLyrics = {
+                    onEditLyrics(currentSongId!!)
+                }
+            )
         }
     }
-    
+
     // プレイリストオプションメニュー
     if (showPlaylistOptions) {
         PlaylistOptionsMenu(
@@ -415,7 +419,7 @@ fun AlbumDetailScreen(
             }
         )
     }
-    
+
     // プレイリスト作成ダイアログ
     if (showCreatePlaylistDialog) {
         CreatePlaylistDialog(
@@ -435,7 +439,7 @@ fun AlbumDetailScreen(
             }
         )
     }
-    
+
     // プレイリスト選択ダイアログ
     if (showAddToPlaylistDialog) {
         SelectPlaylistDialog(
@@ -457,5 +461,3 @@ fun AlbumDetailScreen(
         )
     }
 }
-
-

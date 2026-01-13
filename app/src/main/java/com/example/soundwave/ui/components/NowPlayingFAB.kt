@@ -1,6 +1,7 @@
 package com.example.soundwave.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -12,8 +13,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -31,14 +34,18 @@ fun NowPlayingFAB(
     onSongClick: (Long) -> Unit,
     onPlayPause: () -> Unit,
     onExpandClick: () -> Unit = {},
+    onDismiss: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val musicRepository = remember { AppDatabaseModule.getMusicRepository(context) }
     val playerManager = remember { PlayerManager.getInstance(context) }
     
     var currentSong by remember { mutableStateOf<SongEntity?>(null) }
     val scope = rememberCoroutineScope()
+    var dragOffset by remember { mutableStateOf(0f) }
+    val dismissThreshold = with(density) { 100.dp.toPx() }
     
     // 曲IDが変わったときに曲情報を取得
     LaunchedEffect(currentSongId) {
@@ -51,12 +58,31 @@ fun NowPlayingFAB(
         }
     }
     
+    // 曲IDが変わったときにドラッグオフセットをリセット
+    LaunchedEffect(currentSongId) {
+        dragOffset = 0f
+    }
+    
     // 曲が再生中の場合のみ表示
     if (currentSong != null) {
         Card(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .offset(x = with(density) { dragOffset.toDp() })
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            if (kotlin.math.abs(dragOffset) >= dismissThreshold) {
+                                onDismiss()
+                            }
+                            dragOffset = 0f
+                        }
+                    ) { change, dragAmount ->
+                        dragOffset += dragAmount
+                        change.consume()
+                    }
+                },
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surface

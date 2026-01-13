@@ -6,7 +6,32 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.Snackbar
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -21,10 +46,12 @@ import com.example.soundwave.ui.folder.FolderDetailScreen
 import com.example.soundwave.ui.playlist.PlaylistDetailScreen
 import com.example.soundwave.ui.home.HomeScreen
 import com.example.soundwave.ui.player.PlayerScreen
+import com.example.soundwave.ui.player.LyricsEditScreen
 import com.example.soundwave.ui.settings.SettingsScreen
 import com.example.soundwave.ui.settings.VersionHistoryScreen
 import com.example.soundwave.ui.settings.WidgetSettingsScreen
 import com.example.soundwave.ui.theme.AppTheme
+import com.example.soundwave.ui.download.DownloadProgressManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,6 +66,7 @@ object SoundWaveRoutes {
     const val WIDGET_SETTINGS = "widget_settings"
     const val VERSION_HISTORY = "version_history"
     const val PLAYER = "player/{songId}"
+    const val LYRICS_EDIT = "lyrics_edit/{songId}"
     const val ALBUM = "album/{albumName}"
     const val ARTIST = "artist/{artistName}"
     const val FOLDER = "folder/{folderPath}"
@@ -46,6 +74,7 @@ object SoundWaveRoutes {
     
     // ヘルパー関数
     fun player(songId: Long) = "player/$songId"
+    fun lyricsEdit(songId: Long) = "lyrics_edit/$songId"
     fun album(albumName: String) = "album/${encodeParam(albumName)}"
     fun artist(artistName: String) = "artist/${encodeParam(artistName)}"
     fun folder(folderPath: String) = "folder/${encodeParam(folderPath)}"
@@ -73,6 +102,47 @@ fun SoundWaveNavigation(
     val coroutineScope = rememberCoroutineScope()
     
     var hasPermissions by remember { mutableStateOf(false) }
+    
+    // ダウンロード状態を監視（全画面で表示）
+    val isDownloading by DownloadProgressManager.isDownloading.collectAsState()
+    val completionMessage by DownloadProgressManager.completionMessage.collectAsState()
+    val downloadSnackbarHostState = remember { SnackbarHostState() }
+    
+    // ダウンロード中Snackbarを表示（全画面で継続表示）
+    LaunchedEffect(isDownloading) {
+        if (isDownloading) {
+            try {
+                downloadSnackbarHostState.currentSnackbarData?.dismiss()
+                downloadSnackbarHostState.showSnackbar(
+                    message = "ダウンロード中...",
+                    duration = SnackbarDuration.Indefinite,
+                    actionLabel = "✕"
+                )
+            } catch (e: Exception) {
+                // Snackbar更新エラーは無視
+            }
+        } else {
+            downloadSnackbarHostState.currentSnackbarData?.dismiss()
+        }
+    }
+    
+    // ダウンロード完了メッセージを表示
+    LaunchedEffect(completionMessage) {
+        completionMessage?.let { message ->
+            try {
+                downloadSnackbarHostState.currentSnackbarData?.dismiss()
+                downloadSnackbarHostState.showSnackbar(
+                    message = message,
+                    duration = SnackbarDuration.Short,
+                    actionLabel = "✕"
+                )
+                // メッセージ表示後にクリア
+                DownloadProgressManager.clearCompletionMessage()
+            } catch (e: Exception) {
+                // Snackbar更新エラーは無視
+            }
+        }
+    }
     
     // 曲をクリックしたときの処理（再生のみ、画面遷移しない）
     val onSongClick: (Long) -> Unit = { songId ->
@@ -124,10 +194,11 @@ fun SoundWaveNavigation(
             onPermissionsGranted = { hasPermissions = true }
         )
     } else {
-        NavHost(
-            navController = navController,
-            startDestination = SoundWaveRoutes.HOME
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            NavHost(
+                navController = navController,
+                startDestination = SoundWaveRoutes.HOME
+            ) {
             composable(SoundWaveRoutes.HOME) {
                 HomeScreen(
                     onSongSelected = onSongClick,
@@ -156,6 +227,11 @@ fun SoundWaveNavigation(
                     },
                     onSongDetail = { songId -> 
                         // ボトムシートで表示するため、ナビゲーションは不要
+                    },
+                    onEditLyrics = { songId ->
+                        navController.navigate(SoundWaveRoutes.lyricsEdit(songId)) {
+                            launchSingleTop = false
+                        }
                     }
                 )
             }
@@ -190,10 +266,106 @@ fun SoundWaveNavigation(
                 arguments = listOf(navArgument("songId") { type = NavType.LongType })
             ) { backStackEntry ->
                 val songId = backStackEntry.arguments?.getLong("songId") ?: return@composable
+                val onEditLyrics: () -> Unit = remember(songId) {
+                    {
+                        navController.navigate(SoundWaveRoutes.lyricsEdit(songId)) {
+                            launchSingleTop = false
+                        }
+                    }
+                }
                 PlayerScreen(
                     songId = songId,
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    onEditLyrics = onEditLyrics
                 )
+            }
+            
+            composable(
+                route = SoundWaveRoutes.LYRICS_EDIT,
+                arguments = listOf(navArgument("songId") { type = NavType.LongType }),
+                enterTransition = {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = androidx.compose.animation.core.tween(300)
+                    )
+                },
+                exitTransition = {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = androidx.compose.animation.core.tween(300)
+                    )
+                },
+                popEnterTransition = {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = androidx.compose.animation.core.tween(300)
+                    )
+                },
+                popExitTransition = {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = androidx.compose.animation.core.tween(300)
+                    )
+                }
+            ) { backStackEntry ->
+                val songId = backStackEntry.arguments?.getLong("songId") ?: return@composable
+                val lyricsRepository = remember { AppDatabaseModule.getLyricsRepository(context) }
+                
+                // 歌詞データを取得
+                var lyrics by remember { mutableStateOf<com.example.soundwave.data.database.LyricsEntity?>(null) }
+                var lyricLines by remember { mutableStateOf<List<com.example.soundwave.data.repository.LyricLine>>(emptyList()) }
+                var isLoading by remember { mutableStateOf(true) }
+                
+                LaunchedEffect(songId) {
+                    kotlinx.coroutines.withContext(Dispatchers.IO) {
+                        lyrics = lyricsRepository.getLyrics(songId)
+                        lyrics?.let { l ->
+                            if (!l.lyricsLrc.isNullOrEmpty()) {
+                                lyricLines = lyricsRepository.parseLrcFile(l.lyricsLrc)
+                            }
+                        }
+                        isLoading = false
+                    }
+                }
+                
+                if (isLoading) {
+                    // 読み込み中
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                } else if (lyrics != null) {
+                    LyricsEditScreen(
+                        lyrics = lyrics!!,
+                        lyricLines = lyricLines,
+                        onBack = {
+                            // PlayerScreenに戻る
+                            navController.navigate(SoundWaveRoutes.player(songId)) {
+                                popUpTo(SoundWaveRoutes.LYRICS_EDIT) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        },
+                        onSave = { lyricsText: String, lyricsLrc: String? ->
+                            coroutineScope.launch(Dispatchers.IO) {
+                                lyricsRepository.saveLyrics(songId, lyricsText, lyricsLrc)
+                                withContext(Dispatchers.Main) {
+                                    // PlayerScreenに戻る
+                                    navController.navigate(SoundWaveRoutes.player(songId)) {
+                                        popUpTo(SoundWaveRoutes.LYRICS_EDIT) { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                }
+                            }
+                        }
+                    )
+                } else {
+                    // 歌詞がない場合は戻る
+                    LaunchedEffect(Unit) {
+                        navController.popBackStack()
+                    }
+                }
             }
             
             composable(
@@ -236,6 +408,11 @@ fun SoundWaveNavigation(
                     },
                     onSongDetail = { songId -> 
                         // ボトムシートで表示するため、ナビゲーションは不要
+                    },
+                    onEditLyrics = { songId ->
+                        navController.navigate(SoundWaveRoutes.lyricsEdit(songId)) {
+                            launchSingleTop = false
+                        }
                     }
                 )
             }
@@ -275,6 +452,11 @@ fun SoundWaveNavigation(
                     },
                     onPlaylistSelected = { playlistId -> 
                         navController.navigate(SoundWaveRoutes.playlist(playlistId)) {
+                            launchSingleTop = false
+                        }
+                    },
+                    onEditLyrics = { songId ->
+                        navController.navigate(SoundWaveRoutes.lyricsEdit(songId)) {
                             launchSingleTop = false
                         }
                     }
@@ -318,6 +500,11 @@ fun SoundWaveNavigation(
                         navController.navigate(SoundWaveRoutes.playlist(playlistId)) {
                             launchSingleTop = false
                         }
+                    },
+                    onEditLyrics = { songId ->
+                        navController.navigate(SoundWaveRoutes.lyricsEdit(songId)) {
+                            launchSingleTop = false
+                        }
                     }
                 )
             }
@@ -358,10 +545,29 @@ fun SoundWaveNavigation(
                         navController.navigate(SoundWaveRoutes.playlist(id)) {
                             launchSingleTop = false
                         }
+                    },
+                    onEditLyrics = { songId ->
+                        navController.navigate(SoundWaveRoutes.lyricsEdit(songId)) {
+                            launchSingleTop = false
+                        }
                     }
                 )
             }
-        }
+            } // End NavHost
+            // Snackbarを再生中の曲表示の上に配置（オーバーレイとして配置）
+            SnackbarHost(
+                hostState = downloadSnackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 80.dp),
+                snackbar = { snackbarData ->
+                    Snackbar(
+                        snackbarData = snackbarData,
+                        actionOnNewLine = false
+                    )
+                }
+            )
+        } // End Box
     }
 }
 

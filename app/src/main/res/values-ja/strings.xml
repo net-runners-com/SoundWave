@@ -1,0 +1,174 @@
+<resources>
+    <string name="app_name">SoundWave</string>
+    
+    <!-- Tab Items -->
+    <string name="tab_songs">曲</string>
+    <string name="tab_albums">アルバム</string>
+    <string name="tab_artists">アーティスト</string>
+    <string name="tab_folders">フォルダ</string>
+    <string name="tab_playlists">プレイリスト</string>
+    <string name="tab_youtube">YouTube</string>
+    <string name="tab_map">マップ</string>
+    
+    <!-- Common -->
+    <string name="settings">設定</string>
+    <string name="back">戻る</string>
+    <string name="cancel">キャンセル</string>
+    <string name="ok">OK</string>
+    <string name="delete">削除</string>
+    <string name="edit">編集</string>
+    <string name="save">保存</string>
+    <string name="close">閉じる</string>
+    <string name="open">開く</string>
+    <string name="select">選択</string>
+    <string name="selected">選択中</string>
+    <string name="details">詳細</string>
+    <string name="menu">メニュー</string>
+    <string name="options">オプション</string>
+    <string name="search">検索</string>
+    <string name="play">再生</string>
+    <string name="pause">一時停止</string>
+    <string name="stop">停止</string>
+    <string name="next">次へ</string>
+    <string name="previous">前へ</string>
+    <string name="shuffle">シャッフル</string>
+    <string name="repeat">リピート</string>
+    <string name="add">追加</string>
+    <string name="remove">削除</string>
+    <string name="create">作成</string>
+    <string name="update">更新</string>
+    <string name="loading">読み込み中...</string>
+    <string name="error">エラー</string>
+    <string name="success">成功</string>
+    <string name="no_items">項目がありません</string>
+    <string name="unknown">不明</string>
+    
+    <!-- Home Screen -->
+    <string name="home_title">SoundWave</string>
+    <string name="selecting">選択中</string>
+    
+    <!-- Settings -->
+    <string name="settings_title">設定</string>
+    <string name="settings_appearance">外観</string>
+    <string name="settings_theme_color">テーマカラー</string>
+    <string name="settings_details">詳細設定</string>
+    <string name="settings_allow_background_playback">バックグラウンド再生を許可</string>
+    <string name="settings_stop_on_other_app_audio">他アプリでオーディオ再生時に停止</string>
+    <string name="settings_language">言語</string>
+    <string name="settings_version">バージョン</string>
+    <string name="settings_version_history">バージョン履歴</string>
+    <string name="settings_rescan_music">音楽ファイルを再スキャン</string>
+    <string name="settings_rescanning">再スキャン中...</string>
+    <string name="settings_rescan_complete">再スキャンが完了しました</string>
+    
+    <!-- Language -->
+    <string name="language_japanese">日本語</string>
+    <string name="language_english">English</string>
+    <string name="language_korean">한국어</string>
+    <string name="language_chinese">中文</string>
+    
+    <!-- Songs -->
+    <string name="songs_title">曲</string>
+    <string name="songs_empty">曲がありません</string>
+    <string name="song_title">タイトル</string>
+    <string name="song_artist">アーティスト</string>
+    <string name="song_album">アルバム</string>
+    <string name="song_filename">ファイル名</string>
+    <string name="song_size">サイズ</string>
+    <string name="song_update_date">更新日</string>
+    <string name="song_length">長さ</string>
+    <string name="song_go_to_album">アルバムへ</string>
+    <string name="song_go_to_artist">アーティストへ</string>
+    
+    <!-- Albums -->
+    <string name="albums_title">アルバム</string>
+    <string name="albums_empty">アルバムがありません</string>
+    <string name="album_songs_empty">このアルバムに曲がありません</string>
+    <string name="album_title">アルバム</string>
+    
+    <!-- Artists -->
+    <string name="artists_title">アーティスト</string>
+    <string name="artists_empty">アーティストがありません</string>
+    <string name="artist_songs_empty">このアーティストの曲がありません</string>
+    <string name="artist_title">アーティスト</string>
+    
+    <!-- Folders -->
+    <string name="folders_title">フォルダ</string>
+    <string name="folders_empty">フォルダがありません</string>
+    <string name="folder_songs_empty">このフォルダに曲がありません</string>
+    
+    <!-- Playlists -->
+    <string name="playlists_title">プレイリスト</string>
+    <string name="playlists_empty">プレイリストがありません</string>
+    <string name="playlist_songs_empty">このプレイリストには曲がありません</string>
+    <string name="playlist_create_new">新しいプレイリストを作成</string>
+    <string name="playlist_add_to_existing">既存のプレイリストに追加</string>
+    <string name="playlist_name">プレイリスト名</string>
+    <string name="playlist_name_hint">プレイリスト名を入力</string>
+    <string name="playlist_no_name">プレイリスト</string>
+    
+    <!-- Player -->
+    <string name="player_title">再生中</string>
+    <string name="player_no_lyrics">歌詞がありません</string>
+    <string name="player_lyrics_hint">同じフォルダに.lrcファイルを配置すると\n自動的に読み込まれます</string>
+    <string name="player_search_lyrics">歌詞を検索</string>
+    <string name="player_repeat_none">リピートなし</string>
+    <string name="player_repeat_all">すべてリピート</string>
+    <string name="player_repeat_one">1曲リピート</string>
+    
+    <!-- Lyrics Edit -->
+    <string name="lyrics_edit_title">歌詞を編集</string>
+    <string name="lyrics_edit_start">開始</string>
+    <string name="lyrics_edit_end">終了</string>
+    <string name="lyrics_edit_subtitle">歌詞</string>
+    <string name="lyrics_edit_add_line">行を追加</string>
+    <string name="lyrics_edit_lyrics_hint">歌詞を入力...</string>
+    
+    <!-- YouTube -->
+    <string name="youtube_title">YouTube</string>
+    <string name="youtube_search_hint">検索...</string>
+    <string name="youtube_download">ダウンロード</string>
+    <string name="youtube_downloading">ダウンロード中...</string>
+    <string name="youtube_download_format">形式</string>
+    <string name="youtube_download_quality">品質</string>
+    <string name="youtube_download_complete">ダウンロードが完了しました</string>
+    <string name="youtube_download_failed">ダウンロードに失敗しました</string>
+    
+    <!-- Map -->
+    <string name="map_title">マップ</string>
+    <string name="map_location_permission_required">位置情報の権限が必要です</string>
+    <string name="map_location_permission_description">地図を表示するには、位置情報へのアクセス権限が必要です。</string>
+    <string name="map_grant_permission">権限を許可</string>
+    <string name="map_return_to_current_location">現在地に戻る</string>
+    <string name="map_draw_circle">円を描画</string>
+    <string name="map_edit_mode">編集モード</string>
+    <string name="map_drag_mode">ドラッグモード</string>
+    <string name="map_remove_mode">削除モード</string>
+    <string name="map_circle_name_hint">円の名前を入力</string>
+    <string name="map_circle_name_label">名前</string>
+    <string name="map_circle_playlist_label">プレイリスト</string>
+    <string name="map_circle_playlist_none">プレイリストなし（最新曲を再生）</string>
+    <string name="map_tools">ツール</string>
+    <string name="map_circle_info_title">円の情報を入力</string>
+    
+    <!-- Version History -->
+    <string name="version_history_title">バージョン履歴</string>
+    <string name="version_history_version">バージョン %1$s (%2$s)</string>
+    
+    <!-- Permissions -->
+    <string name="permission_title">SoundWave</string>
+    <string name="permission_description">音楽を楽しむために、以下の権限が必要です：</string>
+    <string name="permission_storage_title">ストレージアクセス</string>
+    <string name="permission_storage_description">端末内の音楽ファイルを読み取るために必要です</string>
+    <string name="permission_notification_title">通知</string>
+    <string name="permission_notification_description">音楽再生のコントロールを通知に表示するために必要です</string>
+    <string name="permission_grant">権限を許可</string>
+    <string name="permission_denied">権限が拒否されました。設定から手動で許可してください。</string>
+    
+    <!-- Size -->
+    <string name="size_mb">%1$.2f MB</string>
+    
+    <!-- MB suffix -->
+    <string name="mb">MB</string>
+</resources>
+

@@ -43,7 +43,8 @@ fun HomeScreen(
     onFolderSelected: (String) -> Unit = {},
     onPlaylistSelected: (Long) -> Unit = {},
     onSettingsClick: () -> Unit = {},
-    onSongDetail: (Long) -> Unit = {}
+    onSongDetail: (Long) -> Unit = {}, // Used in SongDetailBottomSheet
+    onEditLyrics: (Long) -> Unit = {}  // 歌詞編集画面への遷移
 ) {
     val context = LocalContext.current
     val playlistRepository = remember { AppDatabaseModule.getPlaylistRepository(context) }
@@ -55,6 +56,16 @@ fun HomeScreen(
     val playerManager = remember { PlayerManager.getInstance(context) }
     val currentSongId by playerManager.currentSongId.collectAsState()
     val isPlaying by playerManager.isPlaying.collectAsState()
+    
+    // NowPlayingFABの表示状態
+    var isNowPlayingVisible by remember { mutableStateOf(true) }
+    
+    // 曲が変わったときに表示状態をリセット（新しい曲が再生されたときのみ）
+    LaunchedEffect(currentSongId) {
+        if (currentSongId != null) {
+            isNowPlayingVisible = true
+        }
+    }
     
     // ボトムシートの状態
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -93,7 +104,7 @@ fun HomeScreen(
                 TabItem.values().forEachIndexed { index, tabItem ->
                     NavigationDrawerItem(
                         icon = { Icon(tabItem.icon, contentDescription = null) },
-                        label = { Text(tabItem.title) },
+                        label = { Text(tabItem.getTitle(context)) },
                         selected = selectedTabIndex == index,
                         onClick = {
                             selectedTabIndex = index
@@ -109,7 +120,7 @@ fun HomeScreen(
                 
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                    label = { Text("設定") },
+                    label = { Text(context.getString(com.example.soundwave.R.string.settings)) },
                     selected = false,
                     onClick = {
                         scope.launch {
@@ -127,7 +138,7 @@ fun HomeScreen(
                 TopAppBar(
                     title = { 
                         if (isSelectionMode) {
-                            Text("選択中")
+                            Text(context.getString(com.example.soundwave.R.string.selected))
                         } else {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -243,23 +254,29 @@ fun HomeScreen(
             bottomBar = {
                 Column {
                     // 現在再生中の曲を表示（再生中の場合のみ）
-                    NowPlayingFAB(
-                        currentSongId = currentSongId,
-                        isPlaying = isPlaying,
-                        onSongClick = {}, // 画面遷移しない
-                        onPlayPause = {
-                            if (isPlaying) {
-                                playerManager.pause()
-                            } else {
-                                playerManager.resume()
+                    if (isNowPlayingVisible) {
+                        NowPlayingFAB(
+                            currentSongId = currentSongId,
+                            isPlaying = isPlaying,
+                            onSongClick = {}, // 画面遷移しない
+                            onPlayPause = {
+                                if (isPlaying) {
+                                    playerManager.pause()
+                                } else {
+                                    playerManager.resume()
+                                }
+                            },
+                            onExpandClick = {
+                                if (currentSongId != null) {
+                                    showBottomSheet = true
+                                }
+                            },
+                            onDismiss = {
+                                isNowPlayingVisible = false
+                                playerManager.stop()
                             }
-                        },
-                        onExpandClick = {
-                            if (currentSongId != null) {
-                                showBottomSheet = true
-                            }
-                        }
-                    )
+                        )
+                    }
                     
                     // タブバー
                     Surface(
@@ -286,7 +303,7 @@ fun HomeScreen(
                                     ) {
                                         Icon(
                                             imageVector = tabItem.icon,
-                                            contentDescription = tabItem.title,
+                                            contentDescription = tabItem.getTitle(context),
                                             modifier = Modifier
                                                 .size(32.dp)
                                                 .padding(top = 8.dp),
@@ -372,6 +389,9 @@ fun HomeScreen(
                                 showBottomSheet = false
                             }
                         }
+                    },
+                    onEditLyrics = {
+                        onEditLyrics(currentSongId!!)
                     }
                 )
             }

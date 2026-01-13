@@ -15,6 +15,7 @@ import com.example.soundwave.data.repository.MusicRepository
 import com.example.soundwave.data.repository.PlaylistRepository
 import com.example.soundwave.player.PlayerManager
 import com.example.soundwave.service.LocationMonitoringService
+import com.example.soundwave.ui.settings.LanguageManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -224,6 +225,22 @@ private val leafletHtml = """
        margin-top: 0;
        margin-bottom: 20px;
        font-size: 18px;
+     }
+     /* ポップアップの編集ボタンのスタイル */
+     .popup-edit-button {
+       margin-top: 8px;
+       padding: 8px 16px;
+       background-color: #4CAF50;
+       color: white;
+       border: none;
+       border-radius: 4px;
+       font-size: 14px;
+       cursor: pointer;
+       width: 100%;
+       box-sizing: border-box;
+     }
+     .popup-edit-button:hover {
+       background-color: #45a049;
      }
    </style>
 </head>
@@ -476,6 +493,16 @@ private val leafletHtml = """
     pinningOption: false
   });
   
+  // Geoman Leafletの言語設定
+  if (typeof AndroidLocation !== 'undefined') {
+    try {
+      const langCode = AndroidLocation.getLanguageCode();
+      map.pm.setLang(langCode);
+    } catch (e) {
+      // 言語設定エラー（デフォルト言語を使用）
+    }
+  }
+  
   // 描画した円を保持するFeatureGroup
   let drawnItems = new L.FeatureGroup();
   map.addLayer(drawnItems);
@@ -530,10 +557,59 @@ private val leafletHtml = """
           circleLayer.feature.properties.circleId = circle.id;
           
           // ポップアップとツールチップを設定
-          const popupContent = '<b>名前: </b>' + circle.name + '<br><b>プレイリスト: </b>' + playlistName;
+          const popupContent = createPopupContent(circle.name, playlistName, circle.id);
           circleLayer.bindPopup(popupContent, {
             'maxWidth': '400',
             'className': 'PopupDrawCircle'
+          });
+          
+          // ポップアップが開かれたときに編集ボタンのイベントリスナーを追加
+          circleLayer.on('popupopen', function() {
+            const editButton = document.getElementById('editButton_' + circle.id);
+            if (editButton) {
+              editButton.onclick = function(e) {
+                e.stopPropagation();
+                if (typeof showCircleNamePlaylistSelector === 'function') {
+                  showCircleNamePlaylistSelector(function(newName, newPlaylistId) {
+                    if (newName && newName !== null) {
+                      const circleId = circleLayer.feature.properties.circleId;
+                      const circleCenter = circleLayer.getLatLng();
+                      const circleRadius = circleLayer.getRadius();
+                      
+                      // プレイリスト名を取得
+                      let playlists = [];
+                      if (typeof AndroidLocation !== 'undefined') {
+                        const playlistsJson = AndroidLocation.getAllPlaylists();
+                        try {
+                          playlists = JSON.parse(playlistsJson);
+                        } catch (e) {
+                          // Error parsing playlists
+                        }
+                      }
+                      const newPlaylistName = newPlaylistId ? 
+                        (playlists.find(function(p) { return p.id === newPlaylistId; })?.name || getLocalizedString('unknown') || "不明") : 
+                        (getLocalizedString('map_circle_playlist_none') || "最新曲");
+                      
+                      // データベースを更新
+                      if (typeof AndroidLocation !== 'undefined') {
+                        AndroidLocation.updateCircle(circleId, newName, circleCenter.lat, circleCenter.lng, circleRadius, newPlaylistId || 0);
+                      }
+                      
+                      // レイヤーのプロパティを更新
+                      circleLayer.feature.properties.title = newName;
+                      circleLayer.feature.properties.playlistId = newPlaylistId;
+                      
+                      // ポップアップコンテンツを更新
+                      const updatedPopupContent = createPopupContent(newName, newPlaylistName, circleId);
+                      circleLayer.setPopupContent(updatedPopupContent);
+                      
+                      // ツールチップも更新
+                      circleLayer.setTooltipContent(newName);
+                    }
+                  }, circleLayer.feature.properties.title, circleLayer.feature.properties.playlistId);
+                }
+              };
+            }
           });
           
           circleLayer.bindTooltip(circle.name, {
@@ -592,8 +668,38 @@ private val leafletHtml = """
     });
   }
   
+  // モーダルのテキストをローカライズ
+  function localizeModal() {
+    const titleElement = document.querySelector('#circleNamePlaylistContainer h3');
+    const nameLabelElement = document.querySelector('label[for="circleNameInput"]');
+    const playlistLabelElement = document.querySelector('label[for="circlePlaylistSelect"]');
+    const nameInputElement = document.getElementById('circleNameInput');
+    const cancelButton = document.getElementById('circleNamePlaylistCancel');
+    const okButton = document.getElementById('circleNamePlaylistOk');
+    
+    if (titleElement) {
+      titleElement.textContent = getLocalizedString('map_circle_info_title') || '円の情報を入力';
+    }
+    if (nameLabelElement) {
+      nameLabelElement.textContent = getLocalizedString('map_circle_name_label') || '名前';
+    }
+    if (playlistLabelElement) {
+      playlistLabelElement.textContent = getLocalizedString('map_circle_playlist_label') || 'プレイリスト';
+    }
+    if (nameInputElement) {
+      nameInputElement.placeholder = getLocalizedString('map_circle_name_hint') || '円の名前を入力';
+    }
+    if (cancelButton) {
+      cancelButton.textContent = getLocalizedString('cancel') || 'キャンセル';
+    }
+    if (okButton) {
+      okButton.textContent = getLocalizedString('ok') || 'OK';
+    }
+  }
+  
   // 地図が完全に読み込まれた後に円を復元とサイドバーの初期化
   map.whenReady(function() {
+    localizeModal();
     loadSavedCircles();
     
     // サイドバータブのクリックイベント
@@ -694,8 +800,30 @@ private val leafletHtml = """
     sidebar.close();
   });
 
+  // ローカライズ文字列を取得する関数
+  function getLocalizedString(key) {
+    if (typeof AndroidLocation !== 'undefined') {
+      try {
+        return AndroidLocation.getString(key);
+      } catch (e) {
+        return '';
+      }
+    }
+    return '';
+  }
+  
+  // ポップアップコンテンツを作成する関数
+  function createPopupContent(circleName, playlistName, circleId) {
+    const nameLabel = getLocalizedString('map_circle_name_label') || '名前';
+    const playlistLabel = getLocalizedString('map_circle_playlist_label') || 'プレイリスト';
+    const editLabel = getLocalizedString('edit') || '編集';
+    const editButtonId = 'editButton_' + circleId;
+    return '<b>' + nameLabel + ': </b>' + circleName + '<br><b>' + playlistLabel + ': </b>' + playlistName + 
+           '<br><button id="' + editButtonId + '" class="popup-edit-button">' + editLabel + '</button>';
+  }
+  
   // 円の名前とプレイリスト選択モーダルを表示する関数
-  function showCircleNamePlaylistSelector(callback) {
+  function showCircleNamePlaylistSelector(callback, initialName, initialPlaylistId) {
     const modal = document.getElementById('circleNamePlaylistModal');
     const nameInput = document.getElementById('circleNameInput');
     const playlistSelect = document.getElementById('circlePlaylistSelect');
@@ -706,8 +834,8 @@ private val leafletHtml = """
       return;
     }
     
-    // 名前入力フィールドをクリア
-    nameInput.value = 'デフォルト';
+    // 名前入力フィールドを設定（初期値があれば設定、なければデフォルト）
+    nameInput.value = initialName || getLocalizedString('map_circle_name_hint') || 'デフォルト';
     
     // プレイリスト一覧を取得
     let playlists = [];
@@ -721,11 +849,15 @@ private val leafletHtml = """
     }
     
     // セレクトボックスをクリアしてオプションを追加
-    playlistSelect.innerHTML = '<option value="0">プレイリストなし（最新曲を再生）</option>';
+    const playlistNoneText = getLocalizedString('map_circle_playlist_none') || 'プレイリストなし（最新曲を再生）';
+    playlistSelect.innerHTML = '<option value="0">' + playlistNoneText + '</option>';
     playlists.forEach(function(playlist) {
       const option = document.createElement('option');
       option.value = playlist.id;
       option.textContent = playlist.name;
+      if (initialPlaylistId && playlist.id === initialPlaylistId) {
+        option.selected = true;
+      }
       playlistSelect.appendChild(option);
     });
     
@@ -757,7 +889,8 @@ private val leafletHtml = """
       const selectedValue = playlistSelect.value;
       
       if (!circleName) {
-        alert('名前を入力してください');
+        const nameHint = getLocalizedString('map_circle_name_hint') || '名前を入力してください';
+        alert(nameHint);
         return;
       }
       
@@ -872,10 +1005,60 @@ private val leafletHtml = """
             }
           }
           
-          const popupContent = '<b>名前: </b>' + circleName + '<br><b>プレイリスト: </b>' + playlistName;
+          const popupContent = createPopupContent(circleName, playlistName, savedCircleId || 0);
           layer.bindPopup(popupContent, {
             'maxWidth': '400',
             'className': 'PopupDrawCircle'
+          });
+          
+          // ポップアップが開かれたときに編集ボタンのイベントリスナーを追加
+          layer.on('popupopen', function() {
+            const editButtonId = 'editButton_' + (savedCircleId || 0);
+            const editButton = document.getElementById(editButtonId);
+            if (editButton) {
+              editButton.onclick = function(e) {
+                e.stopPropagation();
+                if (typeof showCircleNamePlaylistSelector === 'function') {
+                  showCircleNamePlaylistSelector(function(newName, newPlaylistId) {
+                    if (newName && newName !== null) {
+                      const circleId = layer.feature.properties.circleId;
+                      const circleCenter = layer.getLatLng();
+                      const circleRadius = layer.getRadius();
+                      
+                      // プレイリスト名を取得
+                      let playlists = [];
+                      if (typeof AndroidLocation !== 'undefined') {
+                        const playlistsJson = AndroidLocation.getAllPlaylists();
+                        try {
+                          playlists = JSON.parse(playlistsJson);
+                        } catch (e) {
+                          // Error parsing playlists
+                        }
+                      }
+                      const newPlaylistName = newPlaylistId ? 
+                        (playlists.find(function(p) { return p.id === newPlaylistId; })?.name || getLocalizedString('unknown') || "不明") : 
+                        (getLocalizedString('map_circle_playlist_none') || "最新曲");
+                      
+                      // データベースを更新
+                      if (typeof AndroidLocation !== 'undefined' && circleId) {
+                        AndroidLocation.updateCircle(circleId, newName, circleCenter.lat, circleCenter.lng, circleRadius, newPlaylistId || 0);
+                      }
+                      
+                      // レイヤーのプロパティを更新
+                      layer.feature.properties.title = newName;
+                      layer.feature.properties.playlistId = newPlaylistId;
+                      
+                      // ポップアップコンテンツを更新
+                      const updatedPopupContent = createPopupContent(newName, newPlaylistName, circleId);
+                      layer.setPopupContent(updatedPopupContent);
+                      
+                      // ツールチップも更新
+                      layer.setTooltipContent(newName);
+                    }
+                  }, layer.feature.properties.title, layer.feature.properties.playlistId);
+                }
+              };
+            }
           });
           
           layer.bindTooltip(circleName, {
@@ -918,10 +1101,11 @@ private val leafletHtml = """
         try {
           AndroidLocation.updateCircle(
             circleId,
-            layer.feature.properties.title || "デフォルト",
+            layer.feature.properties.title || getLocalizedString('map_circle_name_hint') || "デフォルト",
             circleCenter.lat,
             circleCenter.lng,
-            circleRadius
+            circleRadius,
+            layer.feature.properties.playlistId || 0
           );
         } catch (e) {
           // Error updating circle
@@ -1032,8 +1216,8 @@ fun MapTab() {
                     loadWithOverviewMode = true
                     setGeolocationEnabled(true)
                     
-                    // キャッシュを有効化してパフォーマンスを向上
-                    cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                    // キャッシュを最大限活用してパフォーマンスを向上
+                    cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
                     
                     // 画像の自動読み込みを有効化
                     loadsImagesAutomatically = true
@@ -1045,6 +1229,10 @@ fun MapTab() {
                     
                     // ミキサーの設定
                     mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                    
+                    // レンダリング優先度を設定（パフォーマンス向上）
+                    @Suppress("DEPRECATION")
+                    setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
                 }
     
                 webChromeClient = object : WebChromeClient() {
@@ -1098,7 +1286,7 @@ fun MapTab() {
                             null
                         )
                         
-                        // invalidateSizeは一度だけ実行（不要な呼び出しを削減）
+                        // invalidateSizeは一度だけ実行（遅延を短縮してパフォーマンス向上）
                         view.postDelayed({
                             view.evaluateJavascript(
                                 """
@@ -1108,7 +1296,7 @@ fun MapTab() {
                                 """.trimIndent(),
                                 null
                             )
-                        }, 100)
+                        }, 50)
                     }
                     
                     override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
@@ -1127,6 +1315,7 @@ fun MapTab() {
   
                 addJavascriptInterface(LocationSaveInterface(ctx), "AndroidLocation")
   
+                // HTMLを読み込み（baseURLを指定してCDNリソースへのアクセスを許可）
                 loadDataWithBaseURL(
                     "https://appassets.androidplatform.net/",
                     leafletHtml,
@@ -1135,68 +1324,39 @@ fun MapTab() {
                     null
                 )
                 
-                post {
-                    evaluateJavascript(
+                // デバッグモードを本番では無効化（パフォーマンス向上）
+                // WebView.setWebContentsDebuggingEnabled(false)
+            }.also { webView = it }
+        }
+        )
+        
+        // カラーテーマが変更されたときに色を更新（WebViewが読み込み完了している場合のみ）
+        LaunchedEffect(colorScheme.primary, colorScheme.onPrimary) {
+            webView?.let { view ->
+                // WebViewが読み込み完了している場合のみ実行（パフォーマンス向上）
+                if (view.progress >= 100) {
+                    // Compose Colorを16進数に変換
+                    fun colorToHex(color: androidx.compose.ui.graphics.Color): String {
+                        val r = (color.red * 255).toInt()
+                        val g = (color.green * 255).toInt()
+                        val b = (color.blue * 255).toInt()
+                        return String.format("#%02X%02X%02X", r, g, b)
+                    }
+                    
+                    val fabBackground = colorToHex(colorScheme.primary)
+                    val fabOnBackground = colorToHex(colorScheme.onPrimary)
+                    
+                    view.evaluateJavascript(
                         """
-                        if (typeof window.map !== 'undefined' && window.map && typeof window.map.invalidateSize === 'function') {
-                          window.map.invalidateSize();
-                        }
+                        (function() {
+                          const root = document.documentElement;
+                          root.style.setProperty('--fab-background', '$fabBackground');
+                          root.style.setProperty('--fab-on-background', '$fabOnBackground');
+                        })();
                         """.trimIndent(),
                         null
                     )
                 }
-            }.also { webView = it }
-        },
-        update = { view ->
-            // カラーテーマの色をCSS変数として設定
-            // Compose Colorを16進数に変換
-            fun colorToHex(color: androidx.compose.ui.graphics.Color): String {
-                val r = (color.red * 255).toInt()
-                val g = (color.green * 255).toInt()
-                val b = (color.blue * 255).toInt()
-                return String.format("#%02X%02X%02X", r, g, b)
-            }
-            
-            val fabBackground = colorToHex(colorScheme.primary)
-            val fabOnBackground = colorToHex(colorScheme.onPrimary)
-            
-            view.evaluateJavascript(
-                """
-                (function() {
-                  const root = document.documentElement;
-                  root.style.setProperty('--fab-background', '$fabBackground');
-                  root.style.setProperty('--fab-on-background', '$fabOnBackground');
-                })();
-                """.trimIndent(),
-                null
-            )
-        }
-        )
-        
-        // カラーテーマが変更されたときに色を更新
-        LaunchedEffect(colorScheme.primary, colorScheme.onPrimary, colorScheme.primaryContainer) {
-            webView?.let { view ->
-                // Compose Colorを16進数に変換
-                fun colorToHex(color: androidx.compose.ui.graphics.Color): String {
-                    val r = (color.red * 255).toInt()
-                    val g = (color.green * 255).toInt()
-                    val b = (color.blue * 255).toInt()
-                    return String.format("#%02X%02X%02X", r, g, b)
-                }
-                
-                val fabBackground = colorToHex(colorScheme.primary)
-                val fabOnBackground = colorToHex(colorScheme.onPrimary)
-                
-                view.evaluateJavascript(
-                    """
-                    (function() {
-                      const root = document.documentElement;
-                      root.style.setProperty('--fab-background', '$fabBackground');
-                      root.style.setProperty('--fab-on-background', '$fabOnBackground');
-                    })();
-                    """.trimIndent(),
-                    null
-                )
             }
         }
         
@@ -1222,9 +1382,9 @@ fun MapTab() {
                           window.map.locate({
                             setView: true,
                             maxZoom: 17,
-                            enableHighAccuracy: true,
+                            enableHighAccuracy: false,
                             timeout: 10000,
-                            maximumAge: 0
+                            maximumAge: 5000
                           });
                         }
                       }
@@ -1234,9 +1394,9 @@ fun MapTab() {
                         window.map.locate({
                           setView: true,
                           maxZoom: 17,
-                          enableHighAccuracy: true,
+                          enableHighAccuracy: false,
                           timeout: 10000,
-                          maximumAge: 0
+                          maximumAge: 5000
                         });
                       }
                     }
@@ -1288,6 +1448,11 @@ class LocationSaveInterface(private val context: Context) {
         val prefs = context.getSharedPreferences("map_location_prefs", Context.MODE_PRIVATE)
         val lng = prefs.getFloat("last_lng", 0f)
         return if (lng != 0f) lng.toDouble() else 0.0
+    }
+    
+    @JavascriptInterface
+    fun getLanguageCode(): String {
+        return LanguageManager.getSelectedLanguage(context)
     }
     
     @JavascriptInterface
@@ -1387,7 +1552,7 @@ class LocationSaveInterface(private val context: Context) {
     }
     
     @JavascriptInterface
-    fun updateCircle(circleId: Long, name: String, latitude: Double, longitude: Double, radius: Double) {
+    fun updateCircle(circleId: Long, name: String, latitude: Double, longitude: Double, radius: Double, playlistId: Long) {
         coroutineScope.launch(Dispatchers.IO) {
             try {
                 val circle = locationCircleRepository.getCircleById(circleId)
@@ -1397,6 +1562,7 @@ class LocationSaveInterface(private val context: Context) {
                         latitude = latitude,
                         longitude = longitude,
                         radius = radius,
+                        playlistId = if (playlistId == 0L) null else playlistId,
                         dateModified = System.currentTimeMillis()
                     )
                     locationCircleRepository.updateCircle(updatedCircle)
@@ -1407,6 +1573,21 @@ class LocationSaveInterface(private val context: Context) {
             } catch (e: Exception) {
                 android.util.Log.e("LocationSave", "Error updating circle: $circleId", e)
             }
+        }
+    }
+    
+    @JavascriptInterface
+    fun getString(resourceName: String): String {
+        return try {
+            val resourceId = context.resources.getIdentifier(resourceName, "string", context.packageName)
+            if (resourceId != 0) {
+                context.getString(resourceId)
+            } else {
+                ""
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("LocationSave", "Error getting string: $resourceName", e)
+            ""
         }
     }
     

@@ -2,6 +2,7 @@ package com.example.soundwave
 
 import android.Manifest
 import android.app.Application
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -9,6 +10,7 @@ import androidx.core.content.ContextCompat
 import com.example.soundwave.data.AppDatabaseModule
 import com.example.soundwave.data.repository.MusicRepository
 import com.example.soundwave.service.LocationMonitoringService
+import com.example.soundwave.ui.settings.LanguageManager
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLException
 import com.yausername.ffmpeg.FFmpeg

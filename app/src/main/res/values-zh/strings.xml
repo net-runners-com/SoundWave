@@ -1,0 +1,174 @@
+<resources>
+    <string name="app_name">SoundWave</string>
+    
+    <!-- Tab Items -->
+    <string name="tab_songs">歌曲</string>
+    <string name="tab_albums">专辑</string>
+    <string name="tab_artists">艺术家</string>
+    <string name="tab_folders">文件夹</string>
+    <string name="tab_playlists">播放列表</string>
+    <string name="tab_youtube">YouTube</string>
+    <string name="tab_map">地图</string>
+    
+    <!-- Common -->
+    <string name="settings">设置</string>
+    <string name="back">返回</string>
+    <string name="cancel">取消</string>
+    <string name="ok">确定</string>
+    <string name="delete">删除</string>
+    <string name="edit">编辑</string>
+    <string name="save">保存</string>
+    <string name="close">关闭</string>
+    <string name="open">打开</string>
+    <string name="select">选择</string>
+    <string name="selected">已选择</string>
+    <string name="details">详情</string>
+    <string name="menu">菜单</string>
+    <string name="options">选项</string>
+    <string name="search">搜索</string>
+    <string name="play">播放</string>
+    <string name="pause">暂停</string>
+    <string name="stop">停止</string>
+    <string name="next">下一个</string>
+    <string name="previous">上一个</string>
+    <string name="shuffle">随机播放</string>
+    <string name="repeat">重复</string>
+    <string name="add">添加</string>
+    <string name="remove">移除</string>
+    <string name="create">创建</string>
+    <string name="update">更新</string>
+    <string name="loading">加载中...</string>
+    <string name="error">错误</string>
+    <string name="success">成功</string>
+    <string name="no_items">无项目</string>
+    <string name="unknown">未知</string>
+    
+    <!-- Home Screen -->
+    <string name="home_title">SoundWave</string>
+    <string name="selecting">选择中</string>
+    
+    <!-- Settings -->
+    <string name="settings_title">设置</string>
+    <string name="settings_appearance">外观</string>
+    <string name="settings_theme_color">主题颜色</string>
+    <string name="settings_details">详细设置</string>
+    <string name="settings_allow_background_playback">允许后台播放</string>
+    <string name="settings_stop_on_other_app_audio">其他应用音频播放时停止</string>
+    <string name="settings_language">语言</string>
+    <string name="settings_version">版本</string>
+    <string name="settings_version_history">版本历史</string>
+    <string name="settings_rescan_music">重新扫描音乐文件</string>
+    <string name="settings_rescanning">扫描中...</string>
+    <string name="settings_rescan_complete">扫描完成</string>
+    
+    <!-- Language -->
+    <string name="language_japanese">日本語</string>
+    <string name="language_english">English</string>
+    <string name="language_korean">한국어</string>
+    <string name="language_chinese">中文</string>
+    
+    <!-- Songs -->
+    <string name="songs_title">歌曲</string>
+    <string name="songs_empty">没有歌曲</string>
+    <string name="song_title">标题</string>
+    <string name="song_artist">艺术家</string>
+    <string name="song_album">专辑</string>
+    <string name="song_filename">文件名</string>
+    <string name="song_size">大小</string>
+    <string name="song_update_date">更新日期</string>
+    <string name="song_length">长度</string>
+    <string name="song_go_to_album">转到专辑</string>
+    <string name="song_go_to_artist">转到艺术家</string>
+    
+    <!-- Albums -->
+    <string name="albums_title">专辑</string>
+    <string name="albums_empty">没有专辑</string>
+    <string name="album_songs_empty">此专辑没有歌曲</string>
+    <string name="album_title">专辑</string>
+    
+    <!-- Artists -->
+    <string name="artists_title">艺术家</string>
+    <string name="artists_empty">没有艺术家</string>
+    <string name="artist_songs_empty">此艺术家没有歌曲</string>
+    <string name="artist_title">艺术家</string>
+    
+    <!-- Folders -->
+    <string name="folders_title">文件夹</string>
+    <string name="folders_empty">没有文件夹</string>
+    <string name="folder_songs_empty">此文件夹没有歌曲</string>
+    
+    <!-- Playlists -->
+    <string name="playlists_title">播放列表</string>
+    <string name="playlists_empty">没有播放列表</string>
+    <string name="playlist_songs_empty">此播放列表没有歌曲</string>
+    <string name="playlist_create_new">创建新播放列表</string>
+    <string name="playlist_add_to_existing">添加到现有播放列表</string>
+    <string name="playlist_name">播放列表名称</string>
+    <string name="playlist_name_hint">输入播放列表名称</string>
+    <string name="playlist_no_name">播放列表</string>
+    
+    <!-- Player -->
+    <string name="player_title">正在播放</string>
+    <string name="player_no_lyrics">没有歌词</string>
+    <string name="player_lyrics_hint">在同一文件夹中放置 .lrc 文件\n将自动加载</string>
+    <string name="player_search_lyrics">搜索歌词</string>
+    <string name="player_repeat_none">不重复</string>
+    <string name="player_repeat_all">重复全部</string>
+    <string name="player_repeat_one">重复一首</string>
+    
+    <!-- Lyrics Edit -->
+    <string name="lyrics_edit_title">编辑歌词</string>
+    <string name="lyrics_edit_start">开始</string>
+    <string name="lyrics_edit_end">结束</string>
+    <string name="lyrics_edit_subtitle">字幕</string>
+    <string name="lyrics_edit_add_line">添加行</string>
+    <string name="lyrics_edit_lyrics_hint">输入歌词...</string>
+    
+    <!-- YouTube -->
+    <string name="youtube_title">YouTube</string>
+    <string name="youtube_search_hint">搜索...</string>
+    <string name="youtube_download">下载</string>
+    <string name="youtube_downloading">下载中...</string>
+    <string name="youtube_download_format">格式</string>
+    <string name="youtube_download_quality">质量</string>
+    <string name="youtube_download_complete">下载完成</string>
+    <string name="youtube_download_failed">下载失败</string>
+    
+    <!-- Map -->
+    <string name="map_title">地图</string>
+    <string name="map_location_permission_required">需要位置权限</string>
+    <string name="map_location_permission_description">显示地图需要位置访问权限。</string>
+    <string name="map_grant_permission">授予权限</string>
+    <string name="map_return_to_current_location">返回当前位置</string>
+    <string name="map_draw_circle">绘制圆形</string>
+    <string name="map_edit_mode">编辑模式</string>
+    <string name="map_drag_mode">拖拽模式</string>
+    <string name="map_remove_mode">删除模式</string>
+    <string name="map_circle_name_hint">输入圆形名称</string>
+    <string name="map_circle_name_label">名称</string>
+    <string name="map_circle_playlist_label">播放列表</string>
+    <string name="map_circle_playlist_none">无播放列表（播放最新歌曲）</string>
+    <string name="map_tools">工具</string>
+    <string name="map_circle_info_title">输入圆形信息</string>
+    
+    <!-- Version History -->
+    <string name="version_history_title">版本历史</string>
+    <string name="version_history_version">版本 %1$s (%2$s)</string>
+    
+    <!-- Permissions -->
+    <string name="permission_title">SoundWave</string>
+    <string name="permission_description">需要以下权限来享受音乐：</string>
+    <string name="permission_storage_title">存储访问</string>
+    <string name="permission_storage_description">需要读取设备上的音乐文件</string>
+    <string name="permission_notification_title">通知</string>
+    <string name="permission_notification_description">需要在通知中显示音乐播放控制</string>
+    <string name="permission_grant">授予权限</string>
+    <string name="permission_denied">权限被拒绝。请从设置中手动授予。</string>
+    
+    <!-- Size -->
+    <string name="size_mb">%1$.2f MB</string>
+    
+    <!-- MB suffix -->
+    <string name="mb">MB</string>
+</resources>
+

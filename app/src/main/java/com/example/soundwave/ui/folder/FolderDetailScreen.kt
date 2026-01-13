@@ -52,7 +52,8 @@ fun FolderDetailScreen(
     onArtistSelected: (String) -> Unit = {},
     onFolderSelected: (String) -> Unit = {},
     onPlaylistSelected: (Long) -> Unit = {},
-    onSongDetail: (Long) -> Unit = {}
+    onSongDetail: (Long) -> Unit = {},
+    onEditLyrics: (Long) -> Unit = {}
 ) {
     val context = LocalContext.current
     val musicRepository = remember { AppDatabaseModule.getMusicRepository(context) }
@@ -181,7 +182,7 @@ fun FolderDetailScreen(
                                 ) {
                                     Icon(
                                         imageVector = tabItem.icon,
-                                        contentDescription = tabItem.title,
+                                        contentDescription = tabItem.getTitle(LocalContext.current),
                                         modifier = Modifier
                                             .size(32.dp)
                                             .padding(top = 8.dp),
@@ -370,6 +371,9 @@ fun FolderDetailScreen(
                             showBottomSheet = false
                         }
                     }
+                },
+                onEditLyrics = {
+                    onEditLyrics(currentSongId!!)
                 }
             )
         }
