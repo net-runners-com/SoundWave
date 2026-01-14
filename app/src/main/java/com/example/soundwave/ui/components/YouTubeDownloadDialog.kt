@@ -14,7 +14,16 @@ enum class DownloadFormat {
 }
 
 enum class DownloadQuality {
-    BEST, HD_1080, HD_720, SD_480, SD_360
+    BEST, HD_1080, HD_720, SD_480, SD_360,
+    // MP3用ビットレート
+    MP3_96, MP3_128, MP3_256, MP3_320
+}
+
+enum class AudioBitrate {
+    KBPS_96,   // 低品質
+    KBPS_128,  // 標準
+    KBPS_256,  // 高音質
+    KBPS_320   // 最高品質
 }
 
 @Composable
@@ -23,8 +32,9 @@ fun YouTubeDownloadDialog(
     onDismiss: () -> Unit,
     onDownload: (format: DownloadFormat, quality: DownloadQuality) -> Unit
 ) {
-    var selectedFormat by remember { mutableStateOf(DownloadFormat.MP4) }
-    var selectedQuality by remember { mutableStateOf(DownloadQuality.BEST) }
+    // MP3に固定
+    val selectedFormat = DownloadFormat.MP3
+    var selectedBitrate by remember { mutableStateOf(AudioBitrate.KBPS_320) }
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -42,49 +52,30 @@ fun YouTubeDownloadDialog(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 
-                // 形式選択
+                // ビットレート選択
                 Text(
-                    text = "形式",
-                    style = MaterialTheme.typography.labelLarge
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    DownloadFormat.values().forEach { format ->
-                        FilterChip(
-                            selected = selectedFormat == format,
-                            onClick = { selectedFormat = format },
-                            label = { Text(format.name) }
-                        )
-                    }
-                }
-                
-                // 解像度選択
-                Text(
-                    text = "解像度",
+                    text = "ビットレート",
                     style = MaterialTheme.typography.labelLarge
                 )
                 Column(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    DownloadQuality.values().forEach { quality ->
+                    AudioBitrate.values().reversed().forEach { bitrate ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
-                                selected = selectedQuality == quality,
-                                onClick = { selectedQuality = quality }
+                                selected = selectedBitrate == bitrate,
+                                onClick = { selectedBitrate = bitrate }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = when (quality) {
-                                    DownloadQuality.BEST -> "最高品質"
-                                    DownloadQuality.HD_1080 -> "1080p (HD)"
-                                    DownloadQuality.HD_720 -> "720p (HD)"
-                                    DownloadQuality.SD_480 -> "480p"
-                                    DownloadQuality.SD_360 -> "360p"
+                                text = when (bitrate) {
+                                    AudioBitrate.KBPS_96 -> "96kbps（低品質）"
+                                    AudioBitrate.KBPS_128 -> "128kbps（標準）"
+                                    AudioBitrate.KBPS_256 -> "256kbps（高音質）"
+                                    AudioBitrate.KBPS_320 -> "320kbps（最高品質）"
                                 },
                                 style = MaterialTheme.typography.bodyMedium
                             )
@@ -96,7 +87,14 @@ fun YouTubeDownloadDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onDownload(selectedFormat, selectedQuality)
+                    // ビットレートをDownloadQualityにマッピング
+                    val quality = when (selectedBitrate) {
+                        AudioBitrate.KBPS_96 -> DownloadQuality.MP3_96
+                        AudioBitrate.KBPS_128 -> DownloadQuality.MP3_128
+                        AudioBitrate.KBPS_256 -> DownloadQuality.MP3_256
+                        AudioBitrate.KBPS_320 -> DownloadQuality.MP3_320
+                    }
+                    onDownload(selectedFormat, quality)
                     onDismiss()
                 }
             ) {

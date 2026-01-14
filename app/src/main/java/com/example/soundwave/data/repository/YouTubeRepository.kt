@@ -260,7 +260,14 @@ class YouTubeRepository(private val context: Context) {
                     request.addOption("-x")
                     request.addOption("--extract-audio")
                     request.addOption("--audio-format", "mp3")
-                    request.addOption("--audio-quality", "0") // 最高品質
+                    // ビットレートに応じてオプションを設定
+                    when (quality) {
+                        "MP3_96" -> request.addOption("--audio-quality", "96K")
+                        "MP3_128" -> request.addOption("--audio-quality", "128K")
+                        "MP3_256" -> request.addOption("--audio-quality", "256K")
+                        "MP3_320" -> request.addOption("--audio-quality", "320K")
+                        else -> request.addOption("--audio-quality", "320K") // デフォルトは最高品質
+                    }
                 }
                 "MP4" -> {
                     when (quality) {

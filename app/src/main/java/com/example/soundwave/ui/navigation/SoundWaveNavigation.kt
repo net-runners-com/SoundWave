@@ -53,6 +53,7 @@ import com.example.soundwave.ui.settings.VersionHistoryScreen
 import com.example.soundwave.ui.settings.WidgetSettingsScreen
 import com.example.soundwave.ui.theme.AppTheme
 import com.example.soundwave.ui.download.DownloadProgressManager
+import com.example.soundwave.ui.download.DownloadHistoryScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -73,6 +74,7 @@ object SoundWaveRoutes {
     const val ARTIST = "artist/{artistName}"
     const val FOLDER = "folder/{folderPath}"
     const val PLAYLIST = "playlist/{playlistId}"
+    const val DOWNLOAD_HISTORY = "download_history"
     
     // ヘルパー関数
     fun player(songId: Long) = "player/$songId"
@@ -232,6 +234,11 @@ fun SoundWaveNavigation(
                     },
                     onEditLyrics = { songId ->
                         navController.navigate(SoundWaveRoutes.lyricsEdit(songId)) {
+                            launchSingleTop = false
+                        }
+                    },
+                    onNavigateToDownloadHistory = {
+                        navController.navigate(SoundWaveRoutes.DOWNLOAD_HISTORY) {
                             launchSingleTop = false
                         }
                     }
@@ -598,6 +605,14 @@ fun SoundWaveNavigation(
                         navController.navigate(SoundWaveRoutes.lyricsEdit(songId)) {
                             launchSingleTop = false
                         }
+                    }
+                )
+            }
+            
+            composable(route = SoundWaveRoutes.DOWNLOAD_HISTORY) {
+                DownloadHistoryScreen(
+                    onBack = {
+                        navController.popBackStack()
                     }
                 )
             }

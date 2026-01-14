@@ -38,6 +38,9 @@ import com.example.soundwave.ui.components.YouTubeDownloadDialog
 import com.example.soundwave.ui.components.DownloadFormat
 import com.example.soundwave.ui.components.DownloadQuality
 import com.example.soundwave.ui.download.DownloadProgressManager
+import com.example.soundwave.ui.download.DownloadHistoryManager
+import com.example.soundwave.ui.download.DownloadItem
+import com.example.soundwave.ui.download.DownloadStatus
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -51,6 +54,11 @@ fun YouTubeTab(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    
+    // DownloadHistoryManagerを初期化
+    LaunchedEffect(Unit) {
+        DownloadHistoryManager.initialize(context)
+    }
     val viewModel: YouTubeViewModel = viewModel(
         factory = object : androidx.lifecycle.ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -180,70 +188,129 @@ fun YouTubeTab(
                             onDownload = { format, quality ->
                                 scope.launch {
                                     try {
+                                        // ダウンロード履歴に追加
+                                        val downloadId = "${video.id}_${System.currentTimeMillis()}"
+                                        val downloadItem = DownloadItem(
+                                            id = downloadId,
+                                            videoTitle = video.title,
+                                            videoId = video.id,
+                                            format = format.name,
+                                            quality = quality.name,
+                                            status = DownloadStatus.DOWNLOADING,
+                                            progress = 0f
+                                        )
+                                        DownloadHistoryManager.addDownload(downloadItem)
+                                        
                                         // ダウンロード開始
                                         DownloadProgressManager.startDownload()
-                                        val filePath = withContext(Dispatchers.IO) {
-                                            repository.downloadVideo(
-                                                videoId = video.id,
-                                                format = format.name,
-                                                quality = quality.name,
-                                                onProgress = { progress, eta ->
-                                                    android.util.Log.d("YouTubeDownload", "Progress: $progress%, ETA: $eta seconds")
-                                                }
-                                            )
-                                        }
-                                        if (filePath != null) {
-                                            val fileName = File(filePath).name
-                                            // ダウンロード完了
-                                            DownloadProgressManager.finishDownload("ダウンロード完了: $fileName")
-                                            // メディアスキャンにファイルを登録
-                                            MediaScannerConnection.scanFile(
-                                                context,
-                                                arrayOf(filePath),
-                                                null
-                                            ) { path, uri ->
-                                                android.util.Log.d("YouTubeTab", "Media scan completed: $path -> $uri")
-                                                // メディアスキャン完了後に少し待ってから音楽ファイルを再スキャン
-                                                scope.launch(Dispatchers.IO) {
-                                                    // メディアスキャンが完全に完了するまで少し待つ
-                                                    kotlinx.coroutines.delay(2000)
-                                                    // HomeViewModelがあればそれを使用、なければ直接Repositoryを使用
-                                                    if (homeViewModel != null) {
-                                                        withContext(Dispatchers.Main) {
-                                                            homeViewModel.scanMusicFiles()
+                                        
+                                        // ダウンロードJobを作成
+                                        var downloadJob: kotlinx.coroutines.Job? = null
+                                        downloadJob = scope.launch(Dispatchers.IO) {
+                                            try {
+                                                val filePath = repository.downloadVideo(
+                                                    videoId = video.id,
+                                                    format = format.name,
+                                                    quality = quality.name,
+                                                    onProgress = { progress, eta ->
+                                                        // 進捗を更新（コルーチンスコープ内で実行）
+                                                        scope.launch(Dispatchers.IO) {
+                                                            DownloadHistoryManager.updateDownload(
+                                                                downloadId,
+                                                                DownloadStatus.DOWNLOADING,
+                                                                progress
+                                                            )
                                                         }
-                                                        android.util.Log.d("YouTubeTab", "Music files rescanned via HomeViewModel")
-                                                    } else {
-                                                        musicRepository.scanMusicFiles()
-                                                        android.util.Log.d("YouTubeTab", "Music files rescanned directly")
+                                                        android.util.Log.d("YouTubeDownload", "Progress: $progress%, ETA: $eta seconds")
                                                     }
+                                                )
+                                                
+                                                if (filePath != null) {
+                                                    val fileName = File(filePath).name
+                                                    // ダウンロード完了
+                                                    DownloadHistoryManager.updateDownload(
+                                                        downloadId,
+                                                        DownloadStatus.COMPLETED,
+                                                        100f,
+                                                        filePath
+                                                    )
+                                                    DownloadHistoryManager.removeActiveDownload(downloadId)
+                                                    DownloadProgressManager.finishDownload("ダウンロード完了: $fileName")
+                                                    // メディアスキャンにファイルを登録
+                                                    MediaScannerConnection.scanFile(
+                                                        context,
+                                                        arrayOf(filePath),
+                                                        null
+                                                    ) { path, uri ->
+                                                        android.util.Log.d("YouTubeTab", "Media scan completed: $path -> $uri")
+                                                        // メディアスキャン完了後に少し待ってから音楽ファイルを再スキャン
+                                                        scope.launch(Dispatchers.IO) {
+                                                            // メディアスキャンが完全に完了するまで少し待つ
+                                                            kotlinx.coroutines.delay(2000)
+                                                            // HomeViewModelがあればそれを使用、なければ直接Repositoryを使用
+                                                            if (homeViewModel != null) {
+                                                                withContext(Dispatchers.Main) {
+                                                                    homeViewModel.scanMusicFiles()
+                                                                }
+                                                                android.util.Log.d("YouTubeTab", "Music files rescanned via HomeViewModel")
+                                                            } else {
+                                                                musicRepository.scanMusicFiles()
+                                                                android.util.Log.d("YouTubeTab", "Music files rescanned directly")
+                                                            }
+                                                        }
+                                                    }
+                                                } else {
+                                                    // ダウンロード失敗
+                                                    DownloadHistoryManager.updateDownload(
+                                                        downloadId,
+                                                        DownloadStatus.FAILED,
+                                                        0f
+                                                    )
+                                                    DownloadHistoryManager.removeActiveDownload(downloadId)
+                                                    DownloadProgressManager.finishDownload("ダウンロードに失敗しました。YoutubeDLの初期化に失敗している可能性があります。")
                                                 }
+                                            } catch (e: com.yausername.youtubedl_android.YoutubeDLException) {
+                                                DownloadHistoryManager.updateDownload(
+                                                    downloadId,
+                                                    DownloadStatus.FAILED,
+                                                    0f
+                                                )
+                                                DownloadHistoryManager.removeActiveDownload(downloadId)
+                                                DownloadProgressManager.cancelDownload()
+                                                android.util.Log.e("YouTubeTab", "YoutubeDL error", e)
+                                                val errorMsg = when {
+                                                    e.message?.contains("failed to initialize") == true -> 
+                                                        "YoutubeDLの初期化に失敗しました。アプリを再起動してください。"
+                                                    e.message?.contains("libpython") == true -> 
+                                                        "必要なライブラリが見つかりません。アプリを再インストールしてください。"
+                                                    else -> "ダウンロードエラー: ${e.message ?: "不明なエラー"}"
+                                                }
+                                                snackbarHostState.showSnackbar(
+                                                    message = errorMsg,
+                                                    actionLabel = "✕"
+                                                )
+                                            } catch (e: Exception) {
+                                                DownloadHistoryManager.updateDownload(
+                                                    downloadId,
+                                                    DownloadStatus.FAILED,
+                                                    0f
+                                                )
+                                                DownloadHistoryManager.removeActiveDownload(downloadId)
+                                                DownloadProgressManager.cancelDownload()
+                                                android.util.Log.e("YouTubeTab", "Download error", e)
+                                                snackbarHostState.showSnackbar(
+                                                    message = "エラー: ${e.message ?: "不明なエラー"}",
+                                                    actionLabel = "✕"
+                                                )
                                             }
-                                        } else {
-                                            // ダウンロード失敗
-                                            DownloadProgressManager.finishDownload("ダウンロードに失敗しました。YoutubeDLの初期化に失敗している可能性があります。")
                                         }
-                                    } catch (e: com.yausername.youtubedl_android.YoutubeDLException) {
-                                        DownloadProgressManager.cancelDownload()
-                                        android.util.Log.e("YouTubeTab", "YoutubeDL error", e)
-                                        val errorMsg = when {
-                                            e.message?.contains("failed to initialize") == true -> 
-                                                "YoutubeDLの初期化に失敗しました。アプリを再起動してください。"
-                                            e.message?.contains("libpython") == true -> 
-                                                "必要なライブラリが見つかりません。アプリを再インストールしてください。"
-                                            else -> "ダウンロードエラー: ${e.message ?: "不明なエラー"}"
+                                        // Jobを登録
+                                        downloadJob?.let { job ->
+                                            DownloadHistoryManager.setActiveDownload(downloadId, job)
                                         }
-                                        snackbarHostState.showSnackbar(
-                                            message = errorMsg,
-                                            actionLabel = "✕"
-                                        )
                                     } catch (e: Exception) {
+                                        android.util.Log.e("YouTubeTab", "Failed to start download", e)
                                         DownloadProgressManager.cancelDownload()
-                                        android.util.Log.e("YouTubeTab", "Download error", e)
-                                        snackbarHostState.showSnackbar(
-                                            message = "エラー: ${e.message ?: "不明なエラー"}",
-                                            actionLabel = "✕"
-                                        )
                                     }
                                 }
                             }

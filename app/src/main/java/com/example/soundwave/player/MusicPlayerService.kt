@@ -22,6 +22,10 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaStyleNotificationHelper
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import com.google.common.util.concurrent.ListenableFuture
+import android.os.Bundle
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
@@ -97,6 +101,7 @@ class MusicPlayerService : Service() {
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         createNotificationChannel()
         initializePlayer()
+        // こいつ
         initializeMediaSession()
         setupAudioFocus()
     }
@@ -191,7 +196,85 @@ class MusicPlayerService : Service() {
     private fun initializeMediaSession() {
         exoPlayer?.let { player ->
             try {
-                mediaSession = MediaSession.Builder(this, player).build()
+                mediaSession = MediaSession.Builder(this, player)
+                    .setCallback(object : MediaSession.Callback {
+                        override fun onConnect(
+                            session: MediaSession,
+                            controller: MediaSession.ControllerInfo
+                        ): MediaSession.ConnectionResult {
+                            // デフォルトのセッションコマンドとプレイヤーコマンドを使用
+                            // ExoPlayerはデフォルトでCOMMAND_SKIP_TO_NEXTとCOMMAND_SKIP_TO_PREVIOUSをサポート
+                            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                                .setAvailableSessionCommands(
+                                    MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
+                                )
+                                .setAvailablePlayerCommands(
+                                    MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS
+                                )
+                                .build()
+                        }
+                        
+                        override fun onCustomCommand(
+                            session: MediaSession,
+                            controller: MediaSession.ControllerInfo,
+                            customCommand: SessionCommand,
+                            args: Bundle
+                        ): ListenableFuture<SessionResult> {
+                            return super.onCustomCommand(session, controller, customCommand, args)
+                        }
+                    })
+                    .build()
+                
+                // ExoPlayerのリスナーで次/前の曲の操作をハンドル
+                player.addListener(object : Player.Listener {
+                    override fun onEvents(player: Player, events: Player.Events) {
+                        if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)) {
+                            // 曲が変わった時の処理
+                            val currentMediaItem = player.currentMediaItem
+                            if (currentMediaItem != null) {
+                                // MediaItemのmediaIdから曲IDを取得して更新
+                                val mediaId = currentMediaItem.mediaId
+                                if (mediaId != null) {
+                                    try {
+                                        val songId = mediaId.toLongOrNull()
+                                        if (songId != null) {
+                                            serviceScope.launch {
+                                                try {
+                                                    val song = withContext(Dispatchers.IO) {
+                                                        musicRepository.getSongById(songId)
+                                                    }
+                                                    song?.let {
+                                                        currentSongId = it.id
+                                                        currentSongTitle = it.title
+                                                        currentSongArtist = it.artist
+                                                        currentAlbumArtPath = it.albumArtPath
+                                                        
+                                                        // PlayerManagerの状態を更新
+                                                        try {
+                                                            val playerManager = PlayerManager.getInstance(applicationContext)
+                                                            playerManager.setCurrentSongId(it.id)
+                                                            playerManager.setPlaying(player.isPlaying)
+                                                        } catch (e: Exception) {
+                                                            android.util.Log.w("MusicPlayerService", "Could not update PlayerManager state", e)
+                                                        }
+                                                        
+                                                        updateNotification()
+                                                        updateWidget()
+                                                    }
+                                                } catch (e: Exception) {
+                                                    android.util.Log.e("MusicPlayerService", "Error updating song info on transition", e)
+                                                }
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("MusicPlayerService", "Error parsing mediaId: $mediaId", e)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                })
+                
             } catch (e: Exception) {
                 android.util.Log.e("MusicPlayerService", "Failed to initialize MediaSession", e)
             }
@@ -238,24 +321,78 @@ class MusicPlayerService : Service() {
                                 }
                             }
                             
-                            val mediaItem = MediaItem.Builder()
-                                .setUri(uri)
-                                .setMediaMetadata(
-                                    MediaMetadata.Builder()
-                                        .setTitle(it.title)
-                                        .setArtist(it.artist)
-                                        .setAlbumTitle(it.album)
-                                        .setArtworkUri(artworkUri)
-                                        .build()
-                                )
-                                .build()
-                            // オーディオフォーカスをリクエスト
-                            if (requestAudioFocus()) {
-                                player.setMediaItem(mediaItem)
-                                player.prepare()
-                                player.play()
+                            // 現在のコンテキストに基づいて曲リストを取得
+                            val songs: List<com.example.soundwave.data.database.SongEntity>
+                            if (contextSongs.isNotEmpty()) {
+                                songs = contextSongs
                             } else {
-                                android.util.Log.w("MusicPlayerService", "Failed to gain audio focus")
+                                songs = withContext(Dispatchers.IO) {
+                                    musicRepository.getAllSongsSync()
+                                }
+                            }
+                            
+                            // 現在の曲のインデックスを探す
+                            val currentIndex = songs.indexOfFirst { song -> song.id == songId }
+                            if (currentIndex == -1) {
+                                android.util.Log.w("MusicPlayerService", "Current song not found in list, playing single item")
+                                // 曲が見つからない場合は単一アイテムとして再生
+                                val mediaItem = MediaItem.Builder()
+                                    .setUri(uri)
+                                    .setMediaId(songId.toString())
+                                    .setMediaMetadata(
+                                        MediaMetadata.Builder()
+                                            .setTitle(it.title)
+                                            .setArtist(it.artist)
+                                            .setAlbumTitle(it.album)
+                                            .setArtworkUri(artworkUri)
+                                            .build()
+                                    )
+                                    .build()
+                                if (requestAudioFocus()) {
+                                    player.setMediaItem(mediaItem)
+                                    player.prepare()
+                                    player.play()
+                                }
+                            } else {
+                                // 複数の曲をキューに入れる
+                                val mediaItems = songs.map { song ->
+                                    val songUri = android.net.Uri.parse("file://${song.filePath}")
+                                    val songArtworkUri = if (song.albumArtPath.isNullOrBlank()) {
+                                        null
+                                    } else {
+                                        try {
+                                            if (song.albumArtPath.startsWith("file://") || song.albumArtPath.startsWith("content://")) {
+                                                Uri.parse(song.albumArtPath)
+                                            } else {
+                                                Uri.parse("file://${song.albumArtPath}")
+                                            }
+                                        } catch (e: Exception) {
+                                            null
+                                        }
+                                    }
+                                    
+                                    MediaItem.Builder()
+                                        .setUri(songUri)
+                                        .setMediaId(song.id.toString())
+                                        .setMediaMetadata(
+                                            MediaMetadata.Builder()
+                                                .setTitle(song.title)
+                                                .setArtist(song.artist)
+                                                .setAlbumTitle(song.album)
+                                                .setArtworkUri(songArtworkUri)
+                                                .build()
+                                        )
+                                        .build()
+                                }
+                                
+                                // オーディオフォーカスをリクエスト
+                                if (requestAudioFocus()) {
+                                    player.setMediaItems(mediaItems, currentIndex, 0)
+                                    player.prepare()
+                                    player.play()
+                                } else {
+                                    android.util.Log.w("MusicPlayerService", "Failed to gain audio focus")
+                                }
                             }
                             
                             // PlayerManagerの状態を更新
@@ -281,7 +418,10 @@ class MusicPlayerService : Service() {
                             // 曲情報が取得できない場合はURIのみで再生
                             // オーディオフォーカスをリクエスト
                             if (requestAudioFocus()) {
-                                val mediaItem = MediaItem.fromUri(uri)
+                                val mediaItem = MediaItem.Builder()
+                                    .setUri(uri)
+                                    .setMediaId(songId.toString())
+                                    .build()
                                 player.setMediaItem(mediaItem)
                                 player.prepare()
                                 player.play()
@@ -314,7 +454,10 @@ class MusicPlayerService : Service() {
                         // エラー時はURIのみで再生
                         // オーディオフォーカスをリクエスト
                         if (requestAudioFocus()) {
-                            val mediaItem = MediaItem.fromUri(uri)
+                            val mediaItem = MediaItem.Builder()
+                                .setUri(uri)
+                                .setMediaId(songId.toString())
+                                .build()
                             player.setMediaItem(mediaItem)
                             player.prepare()
                             player.play()
@@ -536,13 +679,13 @@ class MusicPlayerService : Service() {
         if (mediaSession != null) {
             notificationBuilder.setStyle(
                 MediaStyleNotificationHelper.MediaStyle(mediaSession)
-                    .setShowActionsInCompactView(1) // コンパクトビューに再生/一時停止ボタンを表示
+                    .setShowActionsInCompactView(0, 1, 2) // コンパクトビューに前の曲、再生/一時停止、次の曲ボタンを表示
             )
         } else {
             // MediaSessionがない場合は従来のMediaStyleを使用
             notificationBuilder.setStyle(
                 androidx.media.app.NotificationCompat.MediaStyle()
-                    .setShowActionsInCompactView(1)
+                    .setShowActionsInCompactView(0, 1, 2) // コンパクトビューに前の曲、再生/一時停止、次の曲ボタンを表示
             )
         }
         

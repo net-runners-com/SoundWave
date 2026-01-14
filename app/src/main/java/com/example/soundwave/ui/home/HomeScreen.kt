@@ -44,7 +44,8 @@ fun HomeScreen(
     onPlaylistSelected: (Long) -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onSongDetail: (Long) -> Unit = {}, // Used in SongDetailBottomSheet
-    onEditLyrics: (Long) -> Unit = {}  // 歌詞編集画面への遷移
+    onEditLyrics: (Long) -> Unit = {},  // 歌詞編集画面への遷移
+    onNavigateToDownloadHistory: () -> Unit = {}  // ダウンロード履歴画面への遷移
 ) {
     val context = LocalContext.current
     val playlistRepository = remember { AppDatabaseModule.getPlaylistRepository(context) }
@@ -117,6 +118,19 @@ fun HomeScreen(
                 }
                 
                 Divider()
+                
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.History, contentDescription = null) },
+                    label = { Text("ダウンロード履歴") },
+                    selected = false,
+                    onClick = {
+                        scope.launch {
+                            drawerState.close()
+                        }
+                        onNavigateToDownloadHistory()
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
                 
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Settings, contentDescription = null) },
