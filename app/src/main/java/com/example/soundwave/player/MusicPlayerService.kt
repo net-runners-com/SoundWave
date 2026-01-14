@@ -45,6 +45,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlin.math.pow
 
 class MusicPlayerService : Service() {
     private var exoPlayer: ExoPlayer? = null
@@ -53,16 +54,40 @@ class MusicPlayerService : Service() {
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
     private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        android.util.Log.d("MusicPlayerService", "Audio focus changed: $focusChange")
         when (focusChange) {
-            AudioManager.AUDIOFOCUS_LOSS,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                // 他アプリがオーディオを再生した場合、設定に応じて停止
-                if (com.example.soundwave.ui.settings.AppSettingsManager.isStopOnOtherAppEnabled(this)) {
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                // 永続的なフォーカス損失（他アプリがオーディオを再生した場合）
+                val shouldStop = com.example.soundwave.ui.settings.AppSettingsManager.isStopOnOtherAppEnabled(applicationContext)
+                android.util.Log.d("MusicPlayerService", "AUDIOFOCUS_LOSS: shouldStop=$shouldStop")
+                if (shouldStop) {
+                    android.util.Log.d("MusicPlayerService", "Pausing playback due to audio focus loss")
                     pause()
+                } else {
+                    android.util.Log.d("MusicPlayerService", "Not pausing playback (setting is OFF)")
                 }
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                // 一時的なフォーカス損失（他アプリが一時的にオーディオを再生した場合）
+                val shouldStop = com.example.soundwave.ui.settings.AppSettingsManager.isStopOnOtherAppEnabled(applicationContext)
+                android.util.Log.d("MusicPlayerService", "AUDIOFOCUS_LOSS_TRANSIENT: shouldStop=$shouldStop")
+                if (shouldStop) {
+                    android.util.Log.d("MusicPlayerService", "Pausing playback due to transient audio focus loss")
+                    pause()
+                } else {
+                    android.util.Log.d("MusicPlayerService", "Not pausing playback (setting is OFF)")
+                }
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                // 音量を下げる（通知音など）
+                // 設定に関係なく、音量を下げる
+                android.util.Log.d("MusicPlayerService", "AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK: ducking volume")
+                exoPlayer?.volume = 0.3f
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
                 // オーディオフォーカスを再取得した場合
+                android.util.Log.d("MusicPlayerService", "AUDIOFOCUS_GAIN: restoring volume")
+                exoPlayer?.volume = 1.0f
             }
         }
     }
@@ -503,12 +528,26 @@ class MusicPlayerService : Service() {
     
     fun pause() {
         exoPlayer?.pause()
+        // PlayerManagerの状態を更新
+        try {
+            val playerManager = PlayerManager.getInstance(applicationContext)
+            playerManager.setPlaying(false)
+        } catch (e: Exception) {
+            android.util.Log.w("MusicPlayerService", "Could not update PlayerManager state", e)
+        }
         updateNotification()
         updateWidget()
     }
     
     fun resume() {
         exoPlayer?.play()
+        // PlayerManagerの状態を更新
+        try {
+            val playerManager = PlayerManager.getInstance(applicationContext)
+            playerManager.setPlaying(true)
+        } catch (e: Exception) {
+            android.util.Log.w("MusicPlayerService", "Could not update PlayerManager state", e)
+        }
         updateNotification()
         updateWidget()
     }
@@ -1022,12 +1061,16 @@ class MusicPlayerService : Service() {
         val settings = AudioEffectSettingsManager.loadSettings(applicationContext)
         audioEffectManager.applySettings(settings)
         
-        // 再生速度とピッチを適用
+        // 再生速度とピッチを適用（キーシフトを考慮）
         exoPlayer?.let { player ->
             try {
+                // キーシフトをピッチに変換（セミトーン単位: 2^(keyShift/12)）
+                val keyShiftPitch = 2.0.pow(settings.keyShift / 12.0).toFloat()
+                val finalPitch = settings.pitch * keyShiftPitch
+                
                 val playbackParameters = PlaybackParameters(
                     settings.playbackSpeed,
-                    settings.pitch
+                    finalPitch
                 )
                 player.playbackParameters = playbackParameters
             } catch (e: Exception) {
@@ -1039,16 +1082,20 @@ class MusicPlayerService : Service() {
     fun applyAudioEffectSettings(settings: AudioEffectSettings) {
         audioEffectManager.applySettings(settings)
         
-        // 再生速度とピッチを適用
+        // 再生速度とピッチを適用（キーシフトを考慮）
         exoPlayer?.let { player ->
             try {
+                // キーシフトをピッチに変換（セミトーン単位: 2^(keyShift/12)）
+                val keyShiftPitch = 2.0.pow(settings.keyShift / 12.0).toFloat()
+                val finalPitch = settings.pitch * keyShiftPitch
+                
                 // ExoPlayerのPlaybackParametersを使用して速度とピッチを設定
                 val playbackParameters = PlaybackParameters(
                     settings.playbackSpeed,
-                    settings.pitch
+                    finalPitch
                 )
                 player.playbackParameters = playbackParameters
-                android.util.Log.d("MusicPlayerService", "Playback parameters applied: speed=${settings.playbackSpeed}, pitch=${settings.pitch}")
+                android.util.Log.d("MusicPlayerService", "Playback parameters applied: speed=${settings.playbackSpeed}, pitch=${settings.pitch}, keyShift=${settings.keyShift}, finalPitch=$finalPitch")
             } catch (e: Exception) {
                 android.util.Log.e("MusicPlayerService", "Failed to apply playback parameters", e)
             }

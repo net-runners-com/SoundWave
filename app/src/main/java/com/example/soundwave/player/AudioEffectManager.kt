@@ -19,7 +19,8 @@ data class AudioEffectSettings(
     val virtualizerEnabled: Boolean = false,
     val virtualizerStrength: Short = 0, // 0-1000
     val playbackSpeed: Float = 1.0f, // 0.5x - 2.0x
-    val pitch: Float = 1.0f // 0.5 - 2.0 (セミトーン単位で調整)
+    val pitch: Float = 1.0f, // 0.5 - 2.0 (セミトーン単位で調整)
+    val keyShift: Int = 0 // -12から+12セミトーン（キー変更）
 )
 
 class AudioEffectManager(private val context: Context) {

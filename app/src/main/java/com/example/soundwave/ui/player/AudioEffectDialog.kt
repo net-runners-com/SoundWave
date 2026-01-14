@@ -298,7 +298,8 @@ fun AudioEffectDialog(
                         Slider(
                             value = currentSettings.playbackSpeed,
                             onValueChange = { value ->
-                                val speed = value.coerceIn(0.5f, 2.0f)
+                                // 0.01刻みに丸める
+                                val speed = (kotlin.math.round(value * 100f) / 100f).coerceIn(0.5f, 2.0f)
                                 currentSettings = currentSettings.copy(
                                     playbackSpeed = speed
                                 )
@@ -306,7 +307,7 @@ fun AudioEffectDialog(
                                 playerManager.applyAudioEffectSettings(currentSettings)
                             },
                             valueRange = 0.5f..2.0f,
-                            steps = 14 // 0.1刻み
+                            steps = 149 // 0.01刻み (1.5 / 0.01 = 150ステップ)
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -348,7 +349,8 @@ fun AudioEffectDialog(
                         Slider(
                             value = currentSettings.pitch,
                             onValueChange = { value ->
-                                val pitch = value.coerceIn(0.5f, 2.0f)
+                                // 0.01刻みに丸める
+                                val pitch = (kotlin.math.round(value * 100f) / 100f).coerceIn(0.5f, 2.0f)
                                 currentSettings = currentSettings.copy(
                                     pitch = pitch
                                 )
@@ -356,7 +358,7 @@ fun AudioEffectDialog(
                                 playerManager.applyAudioEffectSettings(currentSettings)
                             },
                             valueRange = 0.5f..2.0f,
-                            steps = 14 // 0.1刻み
+                            steps = 149 // 0.01刻み (1.5 / 0.01 = 150ステップ)
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -372,6 +374,65 @@ fun AudioEffectDialog(
                             )
                             Text(
                                 text = "2.0",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+                
+                // キー
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "キー",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        val keyNames = listOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+                        val displayKey = if (currentSettings.keyShift == 0) {
+                            "0 (元のキー)"
+                        } else {
+                            val keyIndex = (currentSettings.keyShift % 12 + 12) % 12
+                            val octaveShift = currentSettings.keyShift / 12
+                            val sign = if (currentSettings.keyShift > 0) "+" else ""
+                            "$sign${currentSettings.keyShift} (${keyNames[keyIndex]}${if (octaveShift != 0) " ${if (octaveShift > 0) "+" else ""}$octaveShift oct" else ""})"
+                        }
+                        Text(
+                            text = displayKey,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Slider(
+                            value = currentSettings.keyShift.toFloat(),
+                            onValueChange = { value ->
+                                val keyShift = value.toInt().coerceIn(-12, 12)
+                                currentSettings = currentSettings.copy(
+                                    keyShift = keyShift
+                                )
+                                AudioEffectSettingsManager.saveSettings(context, currentSettings)
+                                playerManager.applyAudioEffectSettings(currentSettings)
+                            },
+                            valueRange = -12f..12f,
+                            steps = 23 // 1セミトーン刻み (24ステップ)
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "-12",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                text = "0",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                text = "+12",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }

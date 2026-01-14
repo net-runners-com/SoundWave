@@ -76,6 +76,7 @@ dependencies {
     // ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.2")
+    implementation("androidx.lifecycle:lifecycle-process:2.6.2")
     
     // Room
     implementation("androidx.room:room-runtime:2.6.1")
